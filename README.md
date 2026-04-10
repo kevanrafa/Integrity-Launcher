@@ -1,6 +1,8 @@
 # Integrity Launcher
 
 Work in progress
+- Integrity Launcher is a fork of Pandora Launcher, Created for The Integrity Council
+
 
 ## Features
 - Instance management
@@ -28,6 +30,3 @@ Unlikely, for a few reasons:
 - I believe that it is wrong for launchers to be monetized without distributing revenue back to mod creators that give the launcher value in the first place. Since I don't have the infrastructure to be able to redistribute revenue to mod creators, this is a big barrier.
 - Dealing with monetization takes a lot of (ongoing) work, probably more work than creating the launcher itself.
 - I personally dislike advertisements.
-
-## Instance Page
-![Instance Page](https://raw.githubusercontent.com/Moulberry/IntegrityLauncher/refs/heads/master/screenshots/instance.png)
