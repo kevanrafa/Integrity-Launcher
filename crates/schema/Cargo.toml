@@ -1,0 +1,22 @@
+[package]
+name = "schema"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+chrono.workspace = true
+indexmap.workspace = true
+serde.workspace = true
+serde-untagged.workspace = true
+serde_json.workspace = true
+ustr.workspace = true
+thiserror.workspace = true
+enumset.workspace = true
+relative-path.workspace = true
+enum-map.workspace = true
+strum.workspace = true
+once_cell.workspace = true
+urlencoding.workspace = true
+uuid.workspace = true
+parking_lot.workspace = true
+rustc-hash.workspace = true

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Categories=Game;LauncherStore;GameTool
+Exec=integrity_launcher
+Icon=com.integrity.Launcher
+Name=Integrity Launcher
+Terminal=false
+Type=Application
+X-Desktop-File-Install-Version=0.28
+Keywords=Games;Minecraft;ModManager;Launcher;RustLang
+X-Flatpak=com.integrity.Launcher

@@ -1,0 +1,1 @@
+cargo build --release -p integrity_launcher
