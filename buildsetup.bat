@@ -1,27 +1,31 @@
 @echo off
 setlocal enabledelayedexpansion
 
-set "version=%~1"
-if not "%version%"=="" set "version=%version:#v=%"
+set "version="
+if /I "%~1"=="--version" (
+    set "version=%~2"
+) else (
+    set "version=%~1"
+)
 
-if "%version%"=="" (
-    for /f "tokens=1,* delims==" %%A in ('findstr /R /C:"^version *= *\"" crates\pandora_launcher\Cargo.toml') do (
-        set "version_raw=%%B"
-    )
-    if defined version_raw (
-        set "version=!version_raw: =!"
-        set "version=!version:"=!"
+if /I "!version:~0,1!"=="v" set "version=!version:~1!"
+if not "!version!"=="" set "version=!version:#v=!"
+
+if "!version!"=="" (
+    for /f "tokens=2 delims== " %%A in ('findstr /B /C:"version" crates\pandora_launcher\Cargo.toml') do (
+        set "version=%%~A"
     )
 )
 
-if "%version%"=="" (
+if "!version!"=="" (
     echo Failed to detect version from crates/pandora_launcher/Cargo.toml
     echo Usage: buildsetup.bat [version]
+    echo   or: buildsetup.bat --version [version]
     exit /b 1
 )
 
-echo Building setup installer for version: %version%
-call "%~dp0build_windows.bat" %version%
+echo Building setup installer for version: !version!
+call "%~dp0build_windows.bat" !version!
 if errorlevel 1 exit /b 1
 
 echo.
