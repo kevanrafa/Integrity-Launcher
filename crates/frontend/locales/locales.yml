@@ -299,6 +299,9 @@ file_system:
       en: "Unable to open folder: %{err}"
     not_a_directory:
       en: "Unable to open folder: not a directory"
+  open_url:
+    error:
+      en: "Unable to open link: %{err}"
 system:
   backend_shutdown:
     en: Backend has abruptly shutdown
@@ -801,8 +804,10 @@ settings:
       en: Java Runtime
     mode:
       en: Runtime mode
+    preferred_version:
+      en: Preferred Java version
     note:
-      en: Auto tries system Java first, then bundled Java if needed.
+      en: Auto tries system Java first, then bundled Java if needed. Preferred version supports Java 25, 21, 17, and 8.
   theme:
     title:
       en: Theme

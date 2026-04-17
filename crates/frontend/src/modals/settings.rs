@@ -48,6 +48,7 @@ struct Settings {
     rpc_selecting_text_input: Entity<InputState>,
     rpc_playing_text_input: Entity<InputState>,
     java_mode_select: Entity<SelectState<Vec<&'static str>>>,
+    java_preferred_version_select: Entity<SelectState<Vec<&'static str>>>,
 }
 
 pub fn build_settings_sheet(data: &DataEntities, window: &mut Window, cx: &mut App) -> impl Fn(Sheet, &mut Window, &mut App) -> Sheet + 'static {
@@ -102,6 +103,12 @@ pub fn build_settings_sheet(data: &DataEntities, window: &mut Window, cx: &mut A
             state.set_selected_value(&"Auto", window, cx);
             state
         });
+        let java_preferred_version_select = cx.new(|cx| {
+            let versions = vec!["Game Default", "Java 25", "Java 21", "Java 17", "Java 8"];
+            let mut state = SelectState::new(versions, None, window, cx);
+            state.set_selected_value(&"Game Default", window, cx);
+            state
+        });
 
         let mut settings = Settings {
             selected_tab: SettingsTab::Interface,
@@ -126,6 +133,7 @@ pub fn build_settings_sheet(data: &DataEntities, window: &mut Window, cx: &mut A
             rpc_selecting_text_input,
             rpc_playing_text_input,
             java_mode_select,
+            java_preferred_version_select,
         };
 
         cx.subscribe(&settings.proxy_protocol_select, Settings::on_proxy_protocol_changed).detach();
@@ -138,6 +146,7 @@ pub fn build_settings_sheet(data: &DataEntities, window: &mut Window, cx: &mut A
         cx.subscribe(&settings.rpc_selecting_text_input, Settings::on_rpc_input_changed).detach();
         cx.subscribe(&settings.rpc_playing_text_input, Settings::on_rpc_input_changed).detach();
         cx.subscribe(&settings.java_mode_select, Settings::on_java_mode_changed).detach();
+        cx.subscribe(&settings.java_preferred_version_select, Settings::on_java_preferred_version_changed).detach();
 
         settings.update_backend_configuration(window, cx);
 
@@ -208,6 +217,16 @@ impl Settings {
                         JavaRuntimeMode::Auto => "Auto",
                         JavaRuntimeMode::System => "System",
                         JavaRuntimeMode::Bundled => "Bundled",
+                    };
+                    select.set_selected_value(&selected, window, cx);
+                });
+                settings.java_preferred_version_select.update(cx, |select, cx| {
+                    let selected = match result.config.java_runtime.preferred_major_version {
+                        Some(25) => "Java 25",
+                        Some(21) => "Java 21",
+                        Some(17) => "Java 17",
+                        Some(8) => "Java 8",
+                        _ => "Game Default",
                     };
                     select.set_selected_value(&selected, window, cx);
                 });
@@ -296,6 +315,23 @@ impl Settings {
         self.backend_handle.send(MessageToBackend::SetJavaRuntimeMode { mode });
     }
 
+    fn on_java_preferred_version_changed(
+        &mut self,
+        _state: Entity<SelectState<Vec<&'static str>>>,
+        event: &SelectEvent<Vec<&'static str>>,
+        cx: &mut Context<Self>,
+    ) {
+        let SelectEvent::Confirm(_) = event;
+        let major = self.get_java_runtime_preferred_version(cx);
+        if let Some(config) = &mut self.backend_config {
+            if config.java_runtime.preferred_major_version == major {
+                return;
+            }
+            config.java_runtime.preferred_major_version = major;
+        }
+        self.backend_handle.send(MessageToBackend::SetJavaRuntimePreferredVersion { major });
+    }
+
     fn get_proxy_config(&self, cx: &App) -> ProxyConfig {
         let protocol_name = self.proxy_protocol_select.read(cx).selected_value()
             .map(|s| *s)
@@ -363,6 +399,16 @@ impl Settings {
             "System" => JavaRuntimeMode::System,
             "Bundled" => JavaRuntimeMode::Bundled,
             _ => JavaRuntimeMode::Auto,
+        }
+    }
+
+    fn get_java_runtime_preferred_version(&self, cx: &App) -> Option<u8> {
+        match self.java_preferred_version_select.read(cx).selected_value().copied().unwrap_or("Game Default") {
+            "Java 25" => Some(25),
+            "Java 21" => Some(21),
+            "Java 17" => Some(17),
+            "Java 8" => Some(8),
+            _ => None,
         }
     }
 
@@ -496,6 +542,10 @@ impl Settings {
                         .child(crate::labelled(
                             ts!("settings.java_runtime.mode"),
                             Select::new(&self.java_mode_select),
+                        ))
+                        .child(crate::labelled(
+                            ts!("settings.java_runtime.preferred_version"),
+                            Select::new(&self.java_preferred_version_select),
                         ))
                         .child(gpui::div().text_sm().text_color(cx.theme().muted_foreground).child(ts!("settings.java_runtime.note")))
                 ));

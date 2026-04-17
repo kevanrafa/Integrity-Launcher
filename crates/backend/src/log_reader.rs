@@ -49,7 +49,15 @@ pub fn start_game_output(stdout: PipeReader, stderr: Option<PipeReader>, sender:
 
             while keep_alive_handle.is_alive() {
                 match reader.read_line(&mut raw_text) {
-                    Err(e) => panic!("Error while reading stderr: {:?}", e),
+                    Err(e) => {
+                        sender.send(MessageToFrontend::AddGameOutput {
+                            id,
+                            time: Utc::now().timestamp_millis(),
+                            level: GameOutputLogLevel::Error,
+                            text: Arc::new([format!("(Integrity Launcher) Error while reading stderr: {e}").into()]),
+                        });
+                        break;
+                    },
                     Ok(0) => {
                         break; // EOF
                     },
@@ -776,17 +784,18 @@ impl LogReader {
             return Err(HandleOutputError::InvalidCdata);
         };
 
-        let str = str::from_utf8(cdata)?;
+        let str = String::from_utf8_lossy(cdata);
+        let text: Arc<str> = str.into_owned().into();
 
         match self.stack.last_mut() {
             None => {
-                self.send_raw_text(str)?;
+                self.send_raw_text(&text)?;
             },
             Some(LogOutputState::Message { content }) => {
-                *content = Some(str.into());
+                *content = Some(text);
             },
             Some(LogOutputState::Throwable { content }) => {
-                *content = Some(str.into());
+                *content = Some(text);
             },
             last => {
                 if cfg!(debug_assertions) {
@@ -840,7 +849,7 @@ impl LogReader {
         match self.stack.last_mut() {
             Some(LogOutputState::Event { .. }) => {
                 if name != b"log4j:Event" {
-                    return Err(HandleOutputError::UnmatchedElement(str::from_utf8(name)?.into()));
+                    return Err(HandleOutputError::UnmatchedElement(String::from_utf8_lossy(name).into_owned()));
                 }
 
                 let Some(LogOutputState::Event { timestamp, level, mut text, mut throwable }) = self.stack.pop() else {
@@ -908,7 +917,7 @@ impl LogReader {
             },
             Some(LogOutputState::Message { .. }) => {
                 if name != b"log4j:Message" {
-                    return Err(HandleOutputError::UnmatchedElement(str::from_utf8(name)?.into()));
+                    return Err(HandleOutputError::UnmatchedElement(String::from_utf8_lossy(name).into_owned()));
                 }
 
                 let Some(LogOutputState::Message { content }) = self.stack.pop() else {
@@ -918,12 +927,14 @@ impl LogReader {
                 if let Some(LogOutputState::Event { text, .. }) = self.stack.last_mut() {
                     *text = content;
                 } else {
-                    panic!("log4j:Message should only be inside log4j:Event");
+                    if cfg!(debug_assertions) {
+                        panic!("log4j:Message should only be inside log4j:Event");
+                    }
                 }
             },
             Some(LogOutputState::Throwable { .. }) => {
                 if name != b"log4j:Throwable" {
-                    return Err(HandleOutputError::UnmatchedElement(str::from_utf8(name)?.into()));
+                    return Err(HandleOutputError::UnmatchedElement(String::from_utf8_lossy(name).into_owned()));
                 }
 
                 let Some(LogOutputState::Throwable { content }) = self.stack.pop() else {
@@ -933,14 +944,16 @@ impl LogReader {
                 if let Some(LogOutputState::Event { throwable, .. }) = self.stack.last_mut() {
                     *throwable = content;
                 } else {
-                    panic!("log4j:Throwable should only be inside log4j:Event");
+                    if cfg!(debug_assertions) {
+                        panic!("log4j:Throwable should only be inside log4j:Event");
+                    }
                 }
             },
             Some(LogOutputState::Unknown) => {
                 _ = self.stack.pop();
             }
             None => {
-                return Err(HandleOutputError::UnmatchedElement(str::from_utf8(name)?.into()));
+                return Err(HandleOutputError::UnmatchedElement(String::from_utf8_lossy(name).into_owned()));
             },
         }
         Ok(())
@@ -1030,13 +1043,13 @@ impl LogReader {
 
     fn finish_text(&mut self, remaining: &[u8], buffer: &mut Vec<u8>) -> Result<(), HandleOutputError> {
         let line = if buffer.is_empty() {
-            str::from_utf8(remaining)?
+            String::from_utf8_lossy(remaining)
         } else {
             buffer.extend_from_slice(remaining);
-            str::from_utf8(&buffer)?
+            String::from_utf8_lossy(&buffer)
         };
 
-        let result = self.send_raw_text(line);
+        let result = self.send_raw_text(&line);
 
         buffer.clear();
 

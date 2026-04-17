@@ -14,7 +14,7 @@ use rc_zip_sync::{ArchiveHandle, ReadZip};
 use regex::Regex;
 use rustc_hash::FxHashMap;
 use schema::{
-    assets_index::AssetsIndex, backend_config::JavaRuntimeMode, fabric_launch::FabricLaunch, forge::{ForgeInstallProfile, ForgeInstallProfileLegacy, ForgeSide, VersionFragment}, instance::{AUTO_LIBRARY_PATH_GLFW, AUTO_LIBRARY_PATH_OPENAL, InstanceConfiguration, InstanceWrapperCommandConfiguration}, java_runtime_component::{JavaRuntimeComponentFile, JavaRuntimeComponentManifest}, loader::Loader, maven::MavenCoordinate, version::{
+    assets_index::AssetsIndex, backend_config::JavaRuntimeMode, fabric_launch::FabricLaunch, forge::{ForgeInstallProfile, ForgeInstallProfileLegacy, ForgeSide, VersionFragment}, instance::{AUTO_LIBRARY_PATH_GLFW, AUTO_LIBRARY_PATH_OPENAL, InstanceConfiguration, InstanceWrapperCommandConfiguration}, java_runtime_component::{JavaRuntimeComponentFile, JavaRuntimeComponentManifest}, java_runtimes::JavaRuntimePlatform, loader::Loader, maven::MavenCoordinate, version::{
         GameLibrary, GameLibraryArtifact, GameLibraryDownloads, GameLibraryExtractOptions, GameLogging, LaunchArgument, LaunchArgumentValue, MinecraftVersion, OsArch, OsName, PartialMinecraftVersion, Rule, RuleAction
     }, version_manifest::MinecraftVersionManifest
 };
@@ -64,6 +64,8 @@ pub enum LaunchError {
     CancelledByUser,
     #[error("Loader supports the wrong version of Minecraft: {0}")]
     MismatchedLoaderVersions(Arc<str>),
+    #[error("Missing LWJGL native libraries in extracted natives directory: {0:?}")]
+    MissingLwjglNatives(PathBuf),
 }
 
 #[derive(PartialEq, Eq)]
@@ -89,6 +91,7 @@ impl Launcher {
         dot_minecraft_path: Arc<Path>,
         instance_info: InstanceConfiguration,
         java_runtime_mode: JavaRuntimeMode,
+        preferred_java_major_version: Option<u8>,
         quick_play: Option<QuickPlayLaunch>,
         login_info: MinecraftLoginInfo,
         add_mods: Vec<PathBuf>,
@@ -102,7 +105,7 @@ impl Launcher {
         log::debug!("Creating launch version");
 
         let (version_info, add_vanilla_jar) = tokio::select! {
-            result = self.create_launch_version(http_client, &modal_action.trackers, launch_tracker, &instance_info, java_runtime_mode) => result?,
+            result = self.create_launch_version(http_client, &modal_action.trackers, launch_tracker, &instance_info, java_runtime_mode, preferred_java_major_version) => result?,
             _ = modal_action.request_cancel.cancelled() => {
                 self.sender.send(MessageToFrontend::CloseModal);
                 return Err(LaunchError::CancelledByUser);
@@ -143,6 +146,7 @@ impl Launcher {
             http_client,
             &instance_info,
             java_runtime_mode,
+            preferred_java_major_version,
             &version_info,
             &modal_action.trackers,
             launch_tracker,
@@ -203,9 +207,12 @@ impl Launcher {
                     let output_path = path.to_path(&natives_dir);
                     match file.kind() {
                         rc_zip_sync::rc_zip::EntryKind::Directory => {
-                            let _ = std::fs::create_dir(output_path);
+                            let _ = std::fs::create_dir_all(output_path);
                         },
                         rc_zip_sync::rc_zip::EntryKind::File => {
+                            if let Some(parent) = output_path.parent() {
+                                let _ = std::fs::create_dir_all(parent);
+                            }
                             let Ok(mut outfile) = std::fs::File::create(&output_path) else {
                                 continue;
                             };
@@ -217,6 +224,10 @@ impl Launcher {
             } else {
                 classpath.push(library_path);
             }
+        }
+
+        if !has_lwjgl_natives(&natives_dir) {
+            return Err(LaunchError::MissingLwjglNatives(natives_dir));
         }
 
         let launch_context = LaunchContext {
@@ -257,6 +268,7 @@ impl Launcher {
         launch_tracker: &ProgressTracker,
         instance_info: &InstanceConfiguration,
         java_runtime_mode: JavaRuntimeMode,
+        preferred_java_major_version: Option<u8>,
     ) -> Result<(Arc<MinecraftVersion>, AddVanillaJar), LaunchError> {
         match instance_info.loader {
             Loader::Vanilla => {
@@ -413,6 +425,7 @@ impl Launcher {
 
                 self.create_forgelike_launch_version(http_client, progress_trackers, launch_tracker, instance_info,
                     java_runtime_mode,
+                    preferred_java_major_version,
                     minecraft_versions,
                     &loader_versions.0,
                     "https://maven.minecraftforge.net/net/minecraftforge/forge/{0}/forge-{0}-installer.jar.sha1",
@@ -434,6 +447,7 @@ impl Launcher {
 
                 self.create_forgelike_launch_version(http_client, progress_trackers, launch_tracker, instance_info,
                     java_runtime_mode,
+                    preferred_java_major_version,
                     minecraft_versions,
                     &loader_versions.0,
                     "https://maven.neoforged.net/releases/net/neoforged/neoforge/{0}/neoforge-{0}-installer.jar.sha1",
@@ -454,6 +468,7 @@ impl Launcher {
         launch_tracker: &ProgressTracker,
         instance_info: &InstanceConfiguration,
         java_runtime_mode: JavaRuntimeMode,
+        preferred_java_major_version: Option<u8>,
         minecraft_versions: Arc<MinecraftVersionManifest>,
         loader_versions: &[Ustr],
         installer_hash_url: &'static str,
@@ -541,6 +556,7 @@ impl Launcher {
             http_client,
             instance_info,
             java_runtime_mode,
+            preferred_java_major_version,
             &base_version,
             progress_trackers,
             launch_tracker,
@@ -925,26 +941,38 @@ impl Launcher {
         http_client: &reqwest::Client,
         configuration: &InstanceConfiguration,
         java_runtime_mode: JavaRuntimeMode,
+        preferred_java_major_version: Option<u8>,
         version_info: &MinecraftVersion,
         progress_trackers: &ProgressTrackers,
         launch_tracker: &ProgressTracker,
     ) -> Result<PathBuf, LoadJavaRuntimeError> {
+        let preferred_java_major_version = normalize_preferred_java_major(preferred_java_major_version);
+        let needed_version = required_java_major(version_info, preferred_java_major_version);
         if let Some(jvm_binary) = &configuration.jvm_binary {
             if jvm_binary.enabled && let Some(path) = &jvm_binary.path {
                 if let Some(binary) = Self::search_for_java_binary(&path) {
+                    let Some(major_version) = self.get_major_java_version(&binary) else {
+                        return Err(LoadJavaRuntimeError::InvalidJavaBinary(binary));
+                    };
+                    if major_version != needed_version {
+                        return Err(LoadJavaRuntimeError::IncompatibleJavaBinary {
+                            required: needed_version,
+                            found: major_version,
+                            path: binary,
+                        });
+                    }
                     return Ok(binary);
                 }
             }
         }
 
         if matches!(java_runtime_mode, JavaRuntimeMode::Auto | JavaRuntimeMode::System)
-            && let Some(system_java) = self.find_system_java(version_info)
+            && let Some(system_java) = self.find_system_java(version_info, preferred_java_major_version)
         {
             return Ok(system_java);
         }
 
         if matches!(java_runtime_mode, JavaRuntimeMode::System) {
-            let needed_version = version_info.java_version.as_ref().map(|v| v.major_version).unwrap_or(8);
             return Err(LoadJavaRuntimeError::UnableToFindExternalBinary(needed_version, vec![]));
         }
 
@@ -952,12 +980,6 @@ impl Launcher {
             let paths = std::env::split_paths(&force_external_java);
 
             let mut found_versions = BTreeSet::new();
-
-            let needed_version = if let Some(java_version) = &version_info.java_version {
-                java_version.major_version
-            } else {
-                8
-            };
 
             for path in paths {
                 let Some(binary) = Self::search_for_java_binary(&path) else {
@@ -990,17 +1012,21 @@ impl Launcher {
             (a, b) => format!("{a}-{b}").into(),
         };
 
-        let jre_component = if let Some(java_version) = &version_info.java_version {
+        let mut jre_component = if let Some(java_version) = &version_info.java_version {
             java_version.component
         } else {
             "jre-legacy".into()
         };
-        let needed_version = version_info.java_version.as_ref().map(|v| v.major_version).unwrap_or(8);
-
         let runtimes = meta.fetch(&MojangJavaRuntimesMetadataItem).await?;
 
         let mut runtime_platform = runtimes.platforms.get(&platform).ok_or(LoadJavaRuntimeError::UnknownPlatform)?;
         let mut runtime_components = runtime_platform.components.get(&jre_component);
+        if let Some(preferred) = preferred_java_major_version
+            && let Some(preferred_component) = select_component_for_major(runtime_platform, preferred)
+        {
+            jre_component = preferred_component;
+            runtime_components = runtime_platform.components.get(&jre_component);
+        }
 
         // Fall back to x86 runtime on mac-os, since Rosetta exists
         let missing_runtime_component = runtime_components.map(Vec::is_empty).unwrap_or(true);
@@ -1008,6 +1034,12 @@ impl Launcher {
             platform = "mac-os".into();
             runtime_platform = runtimes.platforms.get(&platform).ok_or(LoadJavaRuntimeError::UnknownPlatform)?;
             runtime_components = runtime_platform.components.get(&jre_component);
+            if let Some(preferred) = preferred_java_major_version
+                && let Some(preferred_component) = select_component_for_major(runtime_platform, preferred)
+            {
+                jre_component = preferred_component;
+                runtime_components = runtime_platform.components.get(&jre_component);
+            }
         }
 
         let Some(runtime_components) = runtime_components else {
@@ -1062,8 +1094,9 @@ impl Launcher {
         result
     }
 
-    fn find_system_java(&self, version_info: &MinecraftVersion) -> Option<PathBuf> {
-        let needed_version = version_info.java_version.as_ref().map(|v| v.major_version).unwrap_or(8);
+    fn find_system_java(&self, version_info: &MinecraftVersion, preferred_java_major_version: Option<u32>) -> Option<PathBuf> {
+        let needed_version = normalize_preferred_java_major(preferred_java_major_version.map(|v| v as u8))
+            .unwrap_or_else(|| version_info.java_version.as_ref().map(|v| v.major_version).unwrap_or(8));
 
         let mut candidates = Vec::new();
         if let Some(java_home) = std::env::var_os("JAVA_HOME") {
@@ -1085,6 +1118,40 @@ impl Launcher {
             }
         }
         None
+    }
+
+    fn has_known_jvm_argument(arguments: &[LaunchArgument], prefix: &str) -> bool {
+        let mut found = false;
+        Self::scan_launch_arguments(arguments, &mut |value| {
+            if value.to_string_lossy().starts_with(prefix) {
+                found = true;
+            }
+        });
+        found
+    }
+
+    fn scan_launch_arguments(arguments: &[LaunchArgument], handler: &mut impl FnMut(&OsStr)) {
+        for argument in arguments {
+            match argument {
+                LaunchArgument::Single(value) => {
+                    Self::scan_launch_argument_value(value, handler);
+                }
+                LaunchArgument::Ruled(ruled) => {
+                    Self::scan_launch_argument_value(&ruled.value, handler);
+                }
+            }
+        }
+    }
+
+    fn scan_launch_argument_value(value: &LaunchArgumentValue, handler: &mut impl FnMut(&OsStr)) {
+        match value {
+            LaunchArgumentValue::Single(value) => handler(OsStr::new(value.as_str())),
+            LaunchArgumentValue::Multiple(values) => {
+                for value in values.iter() {
+                    handler(OsStr::new(value.as_str()));
+                }
+            }
+        }
     }
 
     async fn load_assets(
@@ -1416,6 +1483,36 @@ impl Launcher {
         }
         output.parse().ok()
     }
+}
+
+fn normalize_preferred_java_major(preferred: Option<u8>) -> Option<u32> {
+    match preferred {
+        Some(8) => Some(8),
+        Some(17) => Some(17),
+        Some(21) => Some(21),
+        Some(25) => Some(25),
+        _ => None,
+    }
+}
+
+fn select_component_for_major(platform: &JavaRuntimePlatform, major: u32) -> Option<Ustr> {
+    if major == 8 {
+        for key in platform.components.keys() {
+            let key_lower = key.as_str().to_ascii_lowercase();
+            if key_lower.contains("legacy") || key_lower.contains("jre-8") {
+                return Some(*key);
+            }
+        }
+    }
+
+    let major_str = major.to_string();
+    for key in platform.components.keys() {
+        if key.as_str().contains(&major_str) {
+            return Some(*key);
+        }
+    }
+
+    None
 }
 
 fn expand_logging_argument(argument: &str, path: &Path) -> OsString {
@@ -2277,6 +2374,13 @@ impl LaunchContext {
         self.classpath.push(self.launch_wrapper_path.to_path_buf());
 
         if let Some(arguments) = &version_info.arguments {
+            let has_java_library_path = Launcher::has_known_jvm_argument(&arguments.jvm, "-Djava.library.path=");
+            if !has_java_library_path {
+                let mut java_library_path = OsString::new();
+                java_library_path.push("-Djava.library.path=");
+                java_library_path.push(self.natives_dir.as_os_str());
+                command.arg(java_library_path);
+            }
             self.process_arguments(&arguments.jvm, &mut |arg| {
                 command.arg(arg.to_os_string());
             });

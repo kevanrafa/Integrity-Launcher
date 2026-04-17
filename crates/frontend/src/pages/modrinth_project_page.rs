@@ -14,7 +14,7 @@ use crate::{
     component::error_alert::ErrorAlert, entity::{
         DataEntities,
         metadata::{AsMetadataResult, FrontendMetadata, FrontendMetadataResult},
-    }, icon::PandoraIcon, pages::modrinth_page::{InstalledMod, PrimaryAction, env_display, format_downloads, get_primary_action, icon_for}, ts
+    }, icon::PandoraIcon, open_external_url, pages::modrinth_page::{InstalledMod, PrimaryAction, env_display, format_downloads, get_primary_action, icon_for}, ts
 };
 
 pub struct ModrinthProjectPage {
@@ -284,7 +284,7 @@ impl Render for ModrinthProjectPage {
                     .info()
                     .on_click({
                         let url = format!("https://modrinth.com/{}/{}", project_type_str, slug);
-                        move |_, _, cx| { cx.open_url(&url); }
+                        move |_, window, cx| { open_external_url(&url, window, cx); }
                     }),
             );
 
@@ -295,7 +295,7 @@ impl Render for ModrinthProjectPage {
                         .label(ts!("instance.content.links.source"))
                         .icon(PandoraIcon::CodeXml)
                         .info()
-                        .on_click(move |_, _, cx| { cx.open_url(&url); }),
+                        .on_click(move |_, window, cx| { open_external_url(&url, window, cx); }),
                 );
             }
             if let Some(url) = &project.issues_url {
@@ -305,7 +305,7 @@ impl Render for ModrinthProjectPage {
                         .label(ts!("instance.content.links.issues"))
                         .icon(PandoraIcon::Bug)
                         .info()
-                        .on_click(move |_, _, cx| { cx.open_url(&url); }),
+                        .on_click(move |_, window, cx| { open_external_url(&url, window, cx); }),
                 );
             }
             if let Some(url) = &project.wiki_url {
@@ -314,7 +314,7 @@ impl Render for ModrinthProjectPage {
                     Button::new("wiki")
                         .label(ts!("instance.content.links.wiki"))
                         .info()
-                        .on_click(move |_, _, cx| { cx.open_url(&url); }),
+                        .on_click(move |_, window, cx| { open_external_url(&url, window, cx); }),
                 );
             }
             if let Some(url) = &project.discord_url {
@@ -323,7 +323,7 @@ impl Render for ModrinthProjectPage {
                     Button::new("discord").
                         label(ts!("instance.content.links.discord"))
                         .info()
-                        .on_click(move |_, _, cx| { cx.open_url(&url); }),
+                        .on_click(move |_, window, cx| { open_external_url(&url, window, cx); }),
                 );
             }
 
@@ -347,8 +347,8 @@ impl Render for ModrinthProjectPage {
                 if let Some(url) = url {
                     container = container
                         .cursor_pointer()
-                        .on_click(move |_, _, cx| {
-                            cx.open_url(&url);
+                        .on_click(move |_, window, cx| {
+                            open_external_url(&url, window, cx);
                         });
                 }
 
@@ -433,7 +433,7 @@ impl Render for ModrinthProjectPage {
                                             .id(("gallery_img", idx))
                                             .on_click({
                                                 let url = img.url.clone();
-                                                move |_, _, cx| { cx.open_url(&url); }
+                                                move |_, window, cx| { open_external_url(&url, window, cx); }
                                             }))
                                         .child(v_flex().p_1().max_w_full().min_w_0()
                                             .child(div().text_sm().child(SharedString::new(img.title.as_deref().unwrap_or_default())))

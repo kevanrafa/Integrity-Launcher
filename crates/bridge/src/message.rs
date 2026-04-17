@@ -216,6 +216,9 @@ pub enum MessageToBackend {
     SetJavaRuntimeMode {
         mode: JavaRuntimeMode,
     },
+    SetJavaRuntimePreferredVersion {
+        major: Option<u8>,
+    },
     RequestIntegrityModpacks,
     InstallIntegrityModpack {
         id: Arc<str>,

@@ -420,12 +420,13 @@ impl BackendState {
                     },
                 };
 
-                let java_runtime_mode = self.config.write().get().java_runtime.mode;
+                let java_runtime = self.config.write().get().java_runtime.clone();
                 let result = self.launcher.launch(
                     &self.redirecting_http_client,
                     dot_minecraft,
                     configuration,
-                    java_runtime_mode,
+                    java_runtime.mode,
+                    java_runtime.preferred_major_version,
                     quick_play,
                     login_info,
                     add_mods,
@@ -1145,32 +1146,20 @@ impl BackendState {
                                     tokio::time::sleep(Duration::from_millis(250)).await;
                                 },
                                 Ok(_) => {
-                                    match str::from_utf8(&*line) {
-                                        Ok(utf8) => {
-                                            if first {
-                                                first = false;
-                                                for line in utf8.split('\n') {
-                                                    let replaced = log_reader::replace(line.trim_ascii_end());
-                                                    if send.send(factory.create(&replaced)).await.is_err() {
-                                                        return;
-                                                    }
-                                                }
-                                            } else {
-                                                let replaced = log_reader::replace(utf8.trim_ascii_end());
-                                                if send.send(factory.create(&replaced)).await.is_err() {
-                                                    return;
-                                                }
+                                    let utf8 = String::from_utf8_lossy(&line);
+                                    if first {
+                                        first = false;
+                                        for line in utf8.split('\n') {
+                                            let replaced = log_reader::replace(line.trim_ascii_end());
+                                            if send.send(factory.create(&replaced)).await.is_err() {
+                                                return;
                                             }
-                                        },
-                                        Err(e) => {
-                                            let error = format!("Invalid UTF8: {e}");
-                                            for line in error.split('\n') {
-                                                let replaced = log_reader::replace(line.trim_ascii_end());
-                                                if send.send(factory.create(&replaced)).await.is_err() {
-                                                    return;
-                                                }
-                                            }
-                                        },
+                                        }
+                                    } else {
+                                        let replaced = log_reader::replace(utf8.trim_ascii_end());
+                                        if send.send(factory.create(&replaced)).await.is_err() {
+                                            return;
+                                        }
                                     }
                                     frontend.send_with_serial(MessageToFrontend::Refresh, &serial);
                                     line.clear();
@@ -1577,6 +1566,16 @@ impl BackendState {
                     backend_config.java_runtime.mode = mode;
                 });
                 self.send.send_info("Java runtime mode saved.");
+            },
+            MessageToBackend::SetJavaRuntimePreferredVersion { major } => {
+                let normalized = match major {
+                    Some(8 | 17 | 21 | 25) => major,
+                    _ => None,
+                };
+                self.config.write().modify(|backend_config| {
+                    backend_config.java_runtime.preferred_major_version = normalized;
+                });
+                self.send.send_info("Preferred Java version saved.");
             },
             MessageToBackend::CreateInstanceShortcut { id, path } => {
                 if let Some(instance) = self.instance_state.write().instances.get_mut(id) {

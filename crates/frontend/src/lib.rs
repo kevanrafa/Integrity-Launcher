@@ -375,3 +375,10 @@ pub(crate) fn open_folder(path: &Path, window: &mut Window, cx: &mut App) {
         window.push_notification(notification.autohide(false), cx);
     }
 }
+
+pub(crate) fn open_external_url(url: &str, window: &mut Window, cx: &mut App) {
+    if let Err(err) = open::that_detached(url) {
+        let notification: Notification = (NotificationType::Error, ts!("file_system.open_url.error", err = err)).into();
+        window.push_notification(notification.autohide(false), cx);
+    }
+}

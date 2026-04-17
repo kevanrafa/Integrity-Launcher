@@ -26,12 +26,15 @@ pub struct BackendConfig {
 pub struct JavaRuntimeConfig {
     #[serde(default, skip_serializing_if = "crate::skip_if_default", deserialize_with = "crate::try_deserialize")]
     pub mode: JavaRuntimeMode,
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "crate::try_deserialize")]
+    pub preferred_major_version: Option<u8>,
 }
 
 impl Default for JavaRuntimeConfig {
     fn default() -> Self {
         Self {
             mode: JavaRuntimeMode::Auto,
+            preferred_major_version: None,
         }
     }
 }

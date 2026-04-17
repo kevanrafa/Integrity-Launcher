@@ -3,7 +3,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::fmt::Write;
 use std::time::SystemTime;
@@ -44,14 +44,7 @@ fn main() {
         }
     }
 
-    let data_dir = if let Some(portable_dir) = get_portable_dir() {
-        portable_dir
-    } else {
-        let base_dirs = directories::BaseDirs::new().unwrap();
-        base_dirs.data_dir().into()
-    };
-
-    let launcher_dir = data_dir.join("IntegrityLauncher");
+    let launcher_dir = get_launcher_dir();
     _ = std::env::set_current_dir(&launcher_dir);
 
     let log_path = launcher_dir.join("launcher.log");
@@ -287,12 +280,37 @@ fn launcher_log_level(launcher_dir: &std::path::Path) -> log::LevelFilter {
     }
 }
 
-fn get_portable_dir() -> Option<PathBuf> {
+fn get_launcher_dir() -> PathBuf {
+    let base_dirs = directories::BaseDirs::new().expect("Unable to locate system data directory");
+    let launcher_dir = base_dirs.data_dir().join("IntegrityLauncher");
+
+    if let Some(legacy_portable_launcher_dir) = get_portable_legacy_launcher_dir()
+        && legacy_portable_launcher_dir != launcher_dir
+        && legacy_portable_launcher_dir.exists()
+        && !launcher_dir.exists()
+    {
+        if let Some(parent) = launcher_dir.parent() {
+            _ = std::fs::create_dir_all(parent);
+        }
+        if let Err(err) = std::fs::rename(&legacy_portable_launcher_dir, &launcher_dir) {
+            eprintln!(
+                "Unable to migrate portable launcher data from {:?} to {:?}: {}",
+                legacy_portable_launcher_dir, launcher_dir, err
+            );
+        }
+    }
+
+    _ = std::fs::create_dir_all(&launcher_dir);
+    launcher_dir
+}
+
+fn get_portable_legacy_launcher_dir() -> Option<PathBuf> {
     let current_exe = std::env::current_exe().ok()?;
     let file_name = current_exe.file_name()?;
     let file_name = file_name.to_string_lossy();
     if file_name.to_lowercase().contains("portable") {
-        Some(current_exe.parent()?.into())
+        let portable_dir = current_exe.parent()?;
+        Some(Path::new(portable_dir).join("IntegrityLauncher"))
     } else {
         None
     }
