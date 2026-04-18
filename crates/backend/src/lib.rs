@@ -30,6 +30,7 @@ mod mod_metadata;
 mod id_slab;
 mod persistent;
 mod server_list_pinger;
+mod self_heal;
 mod shortcut;
 mod skin_manager;
 mod syncing;

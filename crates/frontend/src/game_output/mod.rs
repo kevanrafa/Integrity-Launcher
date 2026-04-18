@@ -84,6 +84,17 @@ impl GameOutput {
         self.pending.push((time, level, text));
     }
 
+    pub fn clear(&mut self) {
+        self.pending.clear();
+        if let Some(item_state) = &mut self.item_state {
+            item_state.items.clear();
+            item_state.last_scrolled_item = 0;
+            item_state.item_sizes = FenwickTree::new();
+            item_state.total_line_count = 0;
+            item_state.cached_shaped_lines.item_lines.clear();
+        }
+    }
+
     fn shape_log_level(
         &self,
         level: &'static str,
@@ -1069,6 +1080,12 @@ impl Render for GameOutputRoot {
                 cx.notify();
             })))
             .child(Button::new("bottom").label(ts!("common.nav.bottom")).on_click(cx.listener(|root, _, _, cx| {
+                let mut state = root.scroll_handler.state.borrow_mut();
+                state.scrolling = GameOutputScrolling::Bottom;
+                cx.notify();
+            })))
+            .child(Button::new("clear").label("Clear").on_click(cx.listener(|root, _, _, cx| {
+                root.game_output.update(cx, |game_output, _| game_output.clear());
                 let mut state = root.scroll_handler.state.borrow_mut();
                 state.scrolling = GameOutputScrolling::Bottom;
                 cx.notify();

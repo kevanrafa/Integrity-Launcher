@@ -1060,12 +1060,13 @@ impl Launcher {
             .join(format!("java{needed_version}"))
             .join(jre_component)
             .join(platform);
+        let existed_before = runtime_component_dir.exists();
         let _ = std::fs::create_dir_all(&runtime_component_dir);
         let Ok(runtime_component_dir) = runtime_component_dir.canonicalize() else {
             return Err(LoadJavaRuntimeError::InvalidComponentPath);
         };
 
-        let fresh_install = !runtime_component_dir.exists();
+        let fresh_install = !existed_before;
 
         let runtime = meta.fetch(&MojangJavaRuntimeComponentMetadataItem {
             url: runtime_component.manifest.url,
@@ -1083,7 +1084,20 @@ impl Launcher {
         progress_trackers.push(java_runtime_tracker.clone());
         java_runtime_tracker.notify();
 
-        let result = do_java_runtime_load(http_client, runtime_component_dir, fresh_install, runtime, &java_runtime_tracker).await;
+        let result = do_java_runtime_load(http_client, runtime_component_dir, fresh_install, runtime, &java_runtime_tracker).await
+            .and_then(|binary| {
+                let Some(major_version) = self.get_major_java_version(&binary) else {
+                    return Err(LoadJavaRuntimeError::InvalidJavaBinary(binary));
+                };
+                if major_version != needed_version {
+                    return Err(LoadJavaRuntimeError::IncompatibleJavaBinary {
+                        required: needed_version,
+                        found: major_version,
+                        path: binary,
+                    });
+                }
+                Ok(binary)
+            });
 
         java_runtime_tracker.set_finished(ProgressTrackerFinishType::from_err(result.is_err()));
         java_runtime_tracker.notify();
@@ -1095,8 +1109,7 @@ impl Launcher {
     }
 
     fn find_system_java(&self, version_info: &MinecraftVersion, preferred_java_major_version: Option<u32>) -> Option<PathBuf> {
-        let needed_version = normalize_preferred_java_major(preferred_java_major_version.map(|v| v as u8))
-            .unwrap_or_else(|| version_info.java_version.as_ref().map(|v| v.major_version).unwrap_or(8));
+        let needed_version = required_java_major(version_info, preferred_java_major_version);
 
         let mut candidates = Vec::new();
         if let Some(java_home) = std::env::var_os("JAVA_HOME") {
@@ -1495,6 +1508,39 @@ fn normalize_preferred_java_major(preferred: Option<u8>) -> Option<u32> {
     }
 }
 
+fn required_java_major(version_info: &MinecraftVersion, preferred: Option<u32>) -> u32 {
+    // Legacy versions usually have no declared java_version metadata and require Java 8.
+    if version_info.java_version.is_none() {
+        return 8;
+    }
+
+    preferred.unwrap_or_else(|| version_info.java_version.as_ref().map(|v| v.major_version).unwrap_or(8))
+}
+
+fn has_lwjgl_natives(natives_dir: &Path) -> bool {
+    let read_dir = match std::fs::read_dir(natives_dir) {
+        Ok(read_dir) => read_dir,
+        Err(_) => return false,
+    };
+
+    for entry in read_dir.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        let lower = name.to_ascii_lowercase();
+        if lower.starts_with("lwjgl")
+            && (lower.ends_with(".dll") || lower.ends_with(".so") || lower.ends_with(".dylib") || lower.ends_with(".jnilib"))
+        {
+            return true;
+        }
+    }
+    false
+}
+
 fn select_component_for_major(platform: &JavaRuntimePlatform, major: u32) -> Option<Ustr> {
     if major == 8 {
         for key in platform.components.keys() {
@@ -1592,6 +1638,10 @@ pub enum LoadJavaRuntimeError {
     UnableToFindBinary,
     #[error("Unable to find compatible system Java (required Java {0}, found {1:?}). Install Java {0} or switch Java runtime mode to Bundled in settings.")]
     UnableToFindExternalBinary(u32, Vec<u32>),
+    #[error("Selected Java binary is invalid or unusable: {0:?}")]
+    InvalidJavaBinary(PathBuf),
+    #[error("Incompatible Java binary. Required Java {required}, but found Java {found} at {path:?}.")]
+    IncompatibleJavaBinary { required: u32, found: u32, path: PathBuf },
 }
 
 async fn do_java_runtime_load(
@@ -1621,7 +1671,7 @@ async fn do_java_runtime_load(
 
         match contents {
             JavaRuntimeComponentFile::Directory => {
-                let _ = std::fs::create_dir(path);
+                let _ = std::fs::create_dir_all(path);
             },
             JavaRuntimeComponentFile::File { executable, downloads } => {
                 let mut expected_hash = [0u8; 20];

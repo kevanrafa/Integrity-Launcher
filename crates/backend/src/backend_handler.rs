@@ -1437,8 +1437,13 @@ impl BackendState {
 
                 if response.success {
                     if let Some(url) = response.url {
+                        self.send.send_info(format!(
+                            "Log uploaded: {url} (Send this link via GitHub Issues / Discord for debugging)"
+                        ));
                         modal_action.set_visit_url(ModalActionVisitUrl {
-                            message: format!("Open {}", url).into(),
+                            message: format!(
+                                "Log uploaded successfully.\n\n{url}\n\nSend this link via GitHub Issues / Discord for debugging."
+                            ).into(),
                             url: url.into(),
                             prevent_auto_finish: true,
                         });

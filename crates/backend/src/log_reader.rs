@@ -83,7 +83,9 @@ pub fn start_game_output(stdout: PipeReader, stderr: Option<PipeReader>, sender:
             stack: Vec::new(),
             id,
             sender: sender.clone(),
-            empty_message: "<empty>".into()
+            empty_message: "<empty>".into(),
+            emitted_lwjgl_hint: false,
+            emitted_java_providers_hint: false,
         };
         let mut log_input = LogInput {
             buffer: Vec::new(),
@@ -151,6 +153,8 @@ struct LogReader {
     id: usize,
     sender: FrontendHandle,
     empty_message: Arc<str>,
+    emitted_lwjgl_hint: bool,
+    emitted_java_providers_hint: bool,
 }
 
 struct LogInput {
@@ -912,8 +916,11 @@ impl LogReader {
                     id: self.id,
                     time: timestamp.unwrap_or(Utc::now().timestamp_millis()),
                     level: level.unwrap_or(GameOutputLogLevel::Other),
-                    text: final_lines,
+                    text: final_lines.clone(),
                 });
+                for line in final_lines.iter() {
+                    self.maybe_emit_crash_hint(line);
+                }
             },
             Some(LogOutputState::Message { .. }) => {
                 if name != b"log4j:Message" {
@@ -1061,6 +1068,8 @@ impl LogReader {
             return Ok(());
         }
 
+        self.maybe_emit_crash_hint(line);
+
         self.sender.send(MessageToFrontend::AddGameOutput {
             id: self.id,
             time: Utc::now().timestamp_millis(),
@@ -1069,6 +1078,37 @@ impl LogReader {
         });
 
         Ok(())
+    }
+
+    fn maybe_emit_crash_hint(&mut self, line: &str) {
+        let lower = line.to_ascii_lowercase();
+        if !self.emitted_lwjgl_hint
+            && (lower.contains("unsatisfiedlinkerror") && lower.contains("no lwjgl in java.library.path"))
+        {
+            self.emitted_lwjgl_hint = true;
+            self.sender.send(MessageToFrontend::AddGameOutput {
+                id: self.id,
+                time: Utc::now().timestamp_millis(),
+                level: GameOutputLogLevel::Warn,
+                text: Arc::new([
+                    "(Integrity Launcher Hint) LWJGL native library was not found. Try relaunching to re-extract natives, verify Java architecture (x64), and use Java 8 for legacy versions.".into(),
+                ]),
+            });
+        }
+
+        if !self.emitted_java_providers_hint
+            && (lower.contains("sun.security.jca.providers") || lower.contains("could not initialize class sun.security.jca.providers"))
+        {
+            self.emitted_java_providers_hint = true;
+            self.sender.send(MessageToFrontend::AddGameOutput {
+                id: self.id,
+                time: Utc::now().timestamp_millis(),
+                level: GameOutputLogLevel::Warn,
+                text: Arc::new([
+                    "(Integrity Launcher Hint) Java runtime appears incompatible or corrupted. For Minecraft 1.2.5-1.16, use Java 8 and avoid custom/corrupted JRE builds.".into(),
+                ]),
+            });
+        }
     }
 }
 
