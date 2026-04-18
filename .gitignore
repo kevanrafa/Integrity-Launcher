@@ -1,9 +1,0 @@
-/target
-/dist
-perf.data*
-client_id.txt
-flamegraph.svg
-heaptrack*
-.DS_Store
-.idea/
-.vs
