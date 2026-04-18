@@ -2441,7 +2441,7 @@ impl LaunchContext {
             } else {
                 panic!("Unsupported platform")
             },
-            ArgumentExpansionKey::LauncherName => OsStr::new("PandoraLauncher").into(),
+            ArgumentExpansionKey::LauncherName => OsStr::new("IntegrityLauncher").into(),
             ArgumentExpansionKey::LauncherVersion => OsStr::new("1.0.0").into(),
             ArgumentExpansionKey::Classpath => std::env::join_paths(&self.classpath).unwrap().into(),
             ArgumentExpansionKey::AuthPlayerName => OsStr::new(&*self.login_info.username).into(),

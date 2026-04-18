@@ -3810,6 +3810,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "integrity_launcher"
+version = "0.1.0"
+dependencies = [
+ "backend",
+ "backtrace",
+ "bridge",
+ "clap",
+ "command",
+ "directories",
+ "fern",
+ "frontend",
+ "humantime",
+ "log",
+ "native-dialog",
+ "parking_lot",
+ "tokio",
+ "tokio-util",
+ "winresource",
+]
+
+[[package]]
 name = "interpolate_name"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5393,27 +5414,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "pandora_launcher"
-version = "0.1.0"
-dependencies = [
- "backend",
- "backtrace",
- "bridge",
- "clap",
- "command",
- "directories",
- "fern",
- "frontend",
- "humantime",
- "log",
- "native-dialog",
- "parking_lot",
- "tokio",
- "tokio-util",
- "winresource",
 ]
 
 [[package]]

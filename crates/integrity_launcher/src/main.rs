@@ -50,7 +50,7 @@ fn main() {
         base_dirs.data_dir().into()
     };
 
-    let launcher_dir = data_dir.join("PandoraLauncher");
+    let launcher_dir = data_dir.join("IntegrityLauncher");
     _ = std::fs::create_dir_all(&launcher_dir);
     _ = std::env::set_current_dir(&launcher_dir);
 

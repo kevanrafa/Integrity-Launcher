@@ -114,7 +114,7 @@ pub mod common {
     }
     pub fn app_name() -> &'static str {
         match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
-            _ => "Pandora",
+            _ => "Integrity Launcher",
         }
     }
     pub fn apply_changes() -> &'static str {
@@ -2597,7 +2597,7 @@ pub mod system {
     }
     pub fn metadata_error() -> &'static str {
         match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
-            _ => "Wrong metadata type! Pandora bug!",
+            _ => "Wrong metadata type! Integrity Launcher bug!",
         }
     }
     pub mod update {
@@ -2653,7 +2653,7 @@ pub mod system {
         }
         pub fn title() -> &'static str {
             match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
-                _ => "Update Pandora?",
+                _ => "Update Integrity Launcher?",
             }
         }
     }

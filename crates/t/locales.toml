@@ -235,7 +235,7 @@ en = "Name"
 en = "Author"
 
 [common.app_name]
-en = "Pandora"
+en = "Integrity Launcher"
 [common.unknown]
 en = "Unknown"
 [common.search]
@@ -283,12 +283,12 @@ en = "Unable to open folder: not a directory"
 [system.backend_shutdown]
 en = "Backend has abruptly shutdown"
 [system.metadata_error]
-en = "Wrong metadata type! Pandora bug!"
+en = "Wrong metadata type! Integrity Launcher bug!"
 [system.game_output]
 en = "Minecraft Game Output"
 
 [system.update.title]
-en = "Update Pandora?"
+en = "Update Integrity Launcher?"
 [system.update.current]
 en = "Current version: ${ver: &str}"
 [system.update.new]

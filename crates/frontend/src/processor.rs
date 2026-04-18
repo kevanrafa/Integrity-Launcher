@@ -1,10 +1,24 @@
-use std::sync::{Arc, atomic::AtomicBool};
+use std::sync::{atomic::AtomicBool, Arc};
 
-use bridge::{instance::InstanceStatus, message::{BridgeNotificationType, MessageToFrontend}, quit::QuitCoordinator};
-use gpui::{AnyWindowHandle, App, AppContext, SharedString, TitlebarOptions, Window, WindowDecorations, WindowOptions, px, size};
-use gpui_component::{notification::{Notification, NotificationType}, Root, WindowExt};
+use bridge::{
+    instance::InstanceStatus,
+    message::{BridgeNotificationType, MessageToFrontend},
+    quit::QuitCoordinator,
+};
+use gpui::{
+    px, size, AnyWindowHandle, App, AppContext, SharedString, TitlebarOptions, Window, WindowDecorations, WindowOptions,
+};
+use gpui_component::{
+    notification::{Notification, NotificationType},
+    Root, WindowExt,
+};
 
-use crate::{entity::{DataEntities, account::AccountEntries, instance::InstanceEntries, metadata::FrontendMetadata}, game_output::{GameOutput, GameOutputRoot}, interface_config::InterfaceConfig, root::LauncherRoot};
+use crate::{
+    entity::{account::AccountEntries, instance::InstanceEntries, metadata::FrontendMetadata, DataEntities},
+    game_output::{GameOutput, GameOutputRoot},
+    interface_config::InterfaceConfig,
+    root::LauncherRoot,
+};
 
 pub struct Processor {
     data: DataEntities,
@@ -37,7 +51,12 @@ impl Processor {
     }
 
     #[inline(always)]
-    pub fn with_main_window(&mut self, message: MessageToFrontend, cx: &mut App, func: impl FnOnce(&mut Processor, MessageToFrontend, &mut Window, &mut App)) {
+    pub fn with_main_window(
+        &mut self,
+        message: MessageToFrontend,
+        cx: &mut App,
+        func: impl FnOnce(&mut Processor, MessageToFrontend, &mut Window, &mut App),
+    ) {
         let Some(handle) = self.main_window_handle else {
             self.waiting_for_window.push(message);
             return;
@@ -108,7 +127,9 @@ impl Processor {
                         }
                     }
                 } else if status == InstanceStatus::NotRunning {
-                    if self.main_window_handle.is_none() && self.main_window_hidden.load(std::sync::atomic::Ordering::SeqCst) {
+                    if self.main_window_handle.is_none()
+                        && self.main_window_hidden.load(std::sync::atomic::Ordering::SeqCst)
+                    {
                         self.quit_coordinator.set_can_quit(false);
                         self.main_window_handle = Some(crate::open_main_window(&self.data, cx));
                         self.main_window_hidden.store(false, std::sync::atomic::Ordering::SeqCst);
@@ -146,7 +167,11 @@ impl Processor {
             },
             MessageToFrontend::AddNotification { .. } => {
                 self.with_main_window(message, cx, |_, message, window, cx| {
-                    let MessageToFrontend::AddNotification { notification_type, message } = message else {
+                    let MessageToFrontend::AddNotification {
+                        notification_type,
+                        message,
+                    } = message
+                    else {
                         unreachable!();
                     };
 
@@ -185,7 +210,7 @@ impl Processor {
             MessageToFrontend::CreateGameOutputWindow { receiver } => {
                 self.quit_coordinator.set_can_quit(false);
                 let options = WindowOptions {
-                    app_id: Some("PandoraLauncher".into()),
+                    app_id: Some("IntegrityLauncher".into()),
                     window_min_size: Some(size(px(360.0), px(240.0))),
                     titlebar: Some(TitlebarOptions {
                         title: Some(t::system::game_output().into()),
@@ -204,7 +229,11 @@ impl Processor {
             MessageToFrontend::MoveInstanceToTop { id } => {
                 InstanceEntries::move_to_top(&self.data.instances, id, cx);
             },
-            MessageToFrontend::MetadataResult { request, result, keep_alive_handle } => {
+            MessageToFrontend::MetadataResult {
+                request,
+                result,
+                keep_alive_handle,
+            } => {
                 FrontendMetadata::set(&self.data.metadata, request, result, keep_alive_handle, cx);
             },
             MessageToFrontend::SkinLibraryUpdated { skin_library } => {
@@ -243,7 +272,7 @@ impl Processor {
                 self.main_window_handle = Some(crate::open_main_window(&self.data, cx));
                 self.main_window_hidden.store(false, std::sync::atomic::Ordering::SeqCst);
                 self.process_messages_waiting_for_window(cx);
-            }
+            },
         }
     }
 }

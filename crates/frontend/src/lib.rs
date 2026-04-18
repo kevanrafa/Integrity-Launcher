@@ -22,6 +22,7 @@ use crate::{
 
 pub mod component;
 pub mod data_asset_loader;
+pub mod discord_rpc;
 pub mod entity;
 pub mod game_output;
 pub mod modals;
@@ -73,10 +74,10 @@ pub fn start(
     mut recv: FrontendReceiver,
     quit_coordinator: QuitCoordinator,
 ) {
-    let user_agent = if let Some(version) = option_env!("PANDORA_RELEASE_VERSION") {
-        format!("PandoraLauncher/{version} (https://github.com/Moulberry/PandoraLauncher)")
+    let user_agent = if let Some(version) = option_env!("INTEGRITY_LAUNCHER_VERSION") {
+        format!("IntegrityLauncher/{version} (Fork of Pandora)")
     } else {
-        "PandoraLauncher/dev (https://github.com/Moulberry/PandoraLauncher)".to_string()
+        "IntegrityLauncher/dev (Fork of Pandora)".to_string()
     };
 
     let http_client = Arc::new(reqwest_client::ReqwestClient::user_agent(&user_agent).unwrap());
@@ -216,7 +217,7 @@ pub fn open_main_window(data: &DataEntities, cx: &mut App) -> AnyWindowHandle {
 
     let handle = cx.open_window(
         WindowOptions {
-            app_id: Some("PandoraLauncher".into()),
+            app_id: Some("IntegrityLauncher".into()),
             window_min_size: Some(size(px(500.0), px(250.0))),
             titlebar: Some(TitlebarOptions {
                 title: None,

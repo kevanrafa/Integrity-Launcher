@@ -1,8 +1,8 @@
 [workspace]
 resolver = "3"
-members = ["crates/backend", "crates/bridge", "crates/reqwest_client", "crates/frontend", "crates/pandora_launcher", "crates/nbt", "crates/schema", "crates/auth"]
+members = ["crates/backend", "crates/bridge", "crates/reqwest_client", "crates/frontend", "crates/integrity_launcher", "crates/nbt", "crates/schema", "crates/auth"]
 
-default-members = ["crates/pandora_launcher"]
+default-members = ["crates/integrity_launcher"]
 
 [workspace.package]
 edition = "2024"

@@ -35,9 +35,15 @@ pub struct InterfaceConfig {
     pub content_install_latest: bool,
     #[serde(default, deserialize_with = "schema::try_deserialize")]
     pub content_filter_version: bool,
-    #[serde(default = "default_modrinth_project_type", deserialize_with = "schema::try_deserialize")]
+    #[serde(
+        default = "default_modrinth_project_type",
+        deserialize_with = "schema::try_deserialize"
+    )]
     pub modrinth_page_project_type: ModrinthProjectType,
-    #[serde(default = "default_curseforge_class_id", deserialize_with = "schema::try_deserialize")]
+    #[serde(
+        default = "default_curseforge_class_id",
+        deserialize_with = "schema::try_deserialize"
+    )]
     pub curseforge_page_class_id: CurseforgeClassId,
     #[serde(default, deserialize_with = "schema::try_deserialize")]
     pub hide_main_window_on_launch: bool,
@@ -59,6 +65,10 @@ pub struct InterfaceConfig {
     pub collapse_capes_in_skins_page: bool,
     #[serde(default = "schema::default_true", deserialize_with = "schema::try_deserialize")]
     pub skin_list_show_3d: bool,
+    #[serde(default = "schema::default_true", deserialize_with = "schema::try_deserialize")]
+    pub discord_rpc_enabled: bool,
+    #[serde(default, deserialize_with = "schema::try_deserialize")]
+    pub developer_mode: bool,
 }
 
 fn default_modrinth_project_type() -> ModrinthProjectType {
@@ -93,6 +103,8 @@ impl Default for InterfaceConfig {
             instance_subpage: Default::default(),
             collapse_capes_in_skins_page: false,
             skin_list_show_3d: true,
+            discord_rpc_enabled: true,
+            developer_mode: false,
         }
     }
 }
@@ -158,12 +170,14 @@ impl InterfaceConfig {
 
     pub fn get_mut(cx: &mut App) -> &mut Self {
         if cx.global::<InterfaceConfigHolder>().write_task.is_none() {
-            let task = cx.spawn(async |app| {
-                app.background_executor().timer(Duration::from_secs(5)).await;
-                _ = app.update_global::<InterfaceConfigHolder, _>(|holder, _| {
-                    holder.write_to_disk();
-                });
-            });
+            let task = cx.spawn(
+                async | app | {
+                    app.background_executor().timer(Duration::from_secs(5)).await;
+                    _ = app.update_global::<InterfaceConfigHolder, _>(|holder, _| {
+                        holder.write_to_disk();
+                    });
+                },
+            );
 
             let holder = cx.global_mut::<InterfaceConfigHolder>();
             holder.write_task = Some(task);
@@ -184,7 +198,7 @@ impl InterfaceConfigHolder {
     }
 }
 
-pub(crate) fn try_read_json<T: std::fmt::Debug + Default + for <'de> Deserialize<'de>>(path: &Path) -> T {
+pub(crate) fn try_read_json<T: std::fmt::Debug + Default + for<'de> Deserialize<'de>>(path: &Path) -> T {
     let Ok(data) = std::fs::read(path) else {
         return T::default();
     };
