@@ -470,11 +470,7 @@ impl Render for LauncherUI {
                 let accounts = self.data.accounts.clone();
                 let backend_handle = self.data.backend_handle.clone();
                 move |_, window, cx| {
-                    if accounts.read(cx).accounts.is_empty() {
-                        crate::root::start_new_account_login(&backend_handle, window, cx);
-                        return;
-                    }
-
+                    // Always open the account manager sheet, regardless of whether there are accounts
                     let accounts = accounts.clone();
                     let backend_handle = backend_handle.clone();
                     window.open_sheet_at(gpui_component::Placement::Left, cx, move |sheet, _, cx| {
@@ -538,65 +534,69 @@ impl Render for LauncherUI {
                             .when(cfg!(target_os = "macos"), |this| this.pt_5())
                             .title(t::account::title())
                             .child(v_flex()
-                                .gap_2()
-                                .child(Button::new("add-account").h_10().success().icon(PandoraIcon::Plus).label(t::account::add::label()).on_click({
-                                    let backend_handle = backend_handle.clone();
-                                    move |_, window, cx| {
-                                        crate::root::start_new_account_login(&backend_handle, window, cx);
-                                    }
-                                }))
-                                .child(Button::new("add-offline").h_10().success().icon(PandoraIcon::Plus).label(t::account::add::offline()).on_click({
-                                    let backend_handle = backend_handle.clone();
-                                    move |_, window, cx| {
-                                        let name_input = cx.new(|cx| {
-                                            InputState::new(window, cx)
-                                        });
-                                        let uuid_input = cx.new(|cx| {
-                                            InputState::new(window, cx).placeholder(t::account::uuid_random())
-                                        });
+                                .gap_3()
+                                .child(div()
+                                    .text_sm()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(t::account::add::offline_mode()))
+                                .child(div()
+                                    .text_xs()
+                                    .text_color(cx.theme().muted_foreground)
+                                    .child(t::account::add::offline_warning()))
+                                // Add Account buttons container
+                                .child(v_flex()
+                                    .gap_2()
+                                    .child(Button::new("add-microsoft").h_10().success().icon(PandoraIcon::Plus).label(t::account::add::label()).on_click({
                                         let backend_handle = backend_handle.clone();
-                                        window.open_dialog(cx, move |dialog, _, cx| {
-                                            let username = name_input.read(cx).value();
-                                            let valid_name = username.len() >= 1 && username.len() <= 16 &&
-                                                username.as_bytes().iter().all(|c| *c > 32 && *c < 127);
-                                            let uuid = uuid_input.read(cx).value();
-                                            let valid_uuid = uuid.is_empty() || Uuid::try_parse(&uuid).is_ok();
-
-                                            let valid = valid_name && valid_uuid;
-
-                                            let backend_handle = backend_handle.clone();
-                                            let mut add_button = Button::new("add").label(t::account::add::submit()).disabled(!valid).on_click(move |_, window, cx| {
-                                                window.close_all_dialogs(cx);
-
-                                                let uuid = if let Ok(uuid) = Uuid::try_parse(&uuid) {
-                                                   uuid
-                                                } else {
-                                                    let uuid: u128 = rand::thread_rng().r#gen();
-                                                    let uuid = (uuid & !0xF0000000000000000000) | 0x30000000000000000000; // set version to 3
-                                                    Uuid::from_u128(uuid)
-                                                };
-
-                                                backend_handle.send(MessageToBackend::AddOfflineAccount {
-                                                    name: username.clone().into(),
-                                                    uuid
-                                                });
+                                        move |_, window, cx| {
+                                            crate::root::start_new_account_login(&backend_handle, window, cx);
+                                        }
+                                    }))
+                                    .child(Button::new("add-offline").h_10().warning().icon(PandoraIcon::Plus).label(t::account::add::offline()).on_click({
+                                        let backend_handle = backend_handle.clone();
+                                        move |_, window, cx| {
+                                            // Create input state for username
+                                            let name_input = cx.new(|cx| {
+                                                InputState::new(window, cx).placeholder(t::account::offline_username_placeholder())
                                             });
-
-                                            if valid {
-                                                add_button = add_button.success();
-                                            }
-
-                                            dialog.title(t::account::add::offline())
-                                                .child(v_flex()
-                                                    .gap_2()
-                                                    .child(crate::labelled(t::account::name(), Input::new(&name_input)))
-                                                    .child(crate::labelled(t::account::uuid(), Input::new(&uuid_input)))
-                                                    .child(add_button)
-                                                )
-                                        });
-                                    }
-                                }))
-                                .children(items)
+                                            let backend_handle = backend_handle.clone();
+                                            
+                                            // Open inline form in the same sheet
+                                            window.open_dialog(cx, move |dialog, _, cx| {
+                                                let username = name_input.read(cx).value();
+                                                let valid_name = username.len() >= 1 && username.len() <= 16 &&
+                                                    username.as_bytes().iter().all(|c| *c > 32 && *c < 127);
+                                                
+                                                let backend_handle = backend_handle.clone();
+                                                let mut add_button = Button::new("add").label(t::account::add::submit()).disabled(!valid_name).on_click(move |_, window, cx| {
+                                                    window.close_all_dialogs(cx);
+                                                    
+                                                    // Generate UUID v3 (deterministic based on username)
+                                                    let namespace = uuid::Uuid::NAMESPACE_DNS;
+                                                    let uuid = uuid::Uuid::new_v3(&namespace, username.as_bytes());
+                                                    
+                                                    backend_handle.send(MessageToBackend::AddOfflineAccount {
+                                                        name: username.clone().into(),
+                                                        uuid
+                                                    });
+                                                });
+                                                
+                                                if valid_name {
+                                                    add_button = add_button.success();
+                                                }
+                                                
+                                                dialog.title(t::account::add::offline())
+                                                    .child(v_flex()
+                                                        .gap_2()
+                                                        .child(crate::labelled(t::account::offline_username(), Input::new(&name_input)))
+                                                        .child(add_button)
+                                                    )
+                                            });
+                                        }
+                                    }))
+                                    .child(div().h_1().border_t_1().border_color(cx.theme().border))
+                                    .children(items)
+                                )
                             )
 
                     });

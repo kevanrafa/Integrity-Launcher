@@ -235,6 +235,8 @@ en = "Name"
 en = "Author"
 
 [common.app_name]
+en = "Integrity Launcher (Fork of Pandora)"
+[common.app_name_short]
 en = "Integrity Launcher"
 [common.unknown]
 en = "Unknown"
@@ -319,15 +321,29 @@ en = "UUID"
 [account.uuid_random]
 en = "Random"
 [account.add.title]
-en = "Adding new account"
+en = "Add Account"
 [account.add.label]
-en = "Add account"
+en = "Add Microsoft Account"
 [account.add.submit]
 en = "Add"
 [account.add.offline]
 en = "Add Offline Account"
 [account.add.error]
 en = "Error adding account"
+[account.add.offline_mode]
+en = "Offline Mode (Developer Use Only)"
+[account.add.offline_warning]
+en = "Offline accounts may not work on online servers"
+[account.login_mode]
+en = "Login Mode"
+[account.login_microsoft]
+en = "Microsoft Account"
+[account.login_offline]
+en = "Offline Account"
+[account.offline_username]
+en = "Username"
+[account.offline_username_placeholder]
+en = "Enter username (1-16 characters)"
 
 [instance.title]
 en = "Instances"
@@ -747,6 +763,20 @@ en = "Hide usernames"
 en = "Hide skins"
 [settings.privacy.hide_server_addresses]
 en = "Hide server addresses"
+[settings.discord.title]
+en = "Discord"
+[settings.discord.rpc_enabled]
+en = "Enable Discord Rich Presence"
+[settings.discord.rpc_description]
+en = "Show your game status on Discord"
+[settings.developer.title]
+en = "Developer"
+[settings.developer.mode]
+en = "Developer Mode"
+[settings.developer.mode_description]
+en = "Enable debug logs and advanced settings"
+[settings.developer.debug_logs]
+en = "Show debug logs"
 [settings.proxy.title]
 en = "Proxy Settings"
 [settings.proxy.enabled]
