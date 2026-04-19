@@ -13,8 +13,13 @@ pub fn set_lang(name: &str) {
 pub mod account {
     pub fn get(key: &str) -> Option<&'static str> {
         match key {
+            "login_microsoft" => Some(login_microsoft()),
+            "login_mode" => Some(login_mode()),
+            "login_offline" => Some(login_offline()),
             "name" => Some(name()),
             "none" => Some(none()),
+            "offline_username" => Some(offline_username()),
+            "offline_username_placeholder" => Some(offline_username_placeholder()),
             "override_account" => Some(override_account()),
             "title" => Some(title()),
             "uuid" => Some(uuid()),
@@ -28,6 +33,8 @@ pub mod account {
                 "error" => Some(error()),
                 "label" => Some(label()),
                 "offline" => Some(offline()),
+                "offline_mode" => Some(offline_mode()),
+                "offline_warning" => Some(offline_warning()),
                 "submit" => Some(submit()),
                 "title" => Some(title()),
                 _ => None,
@@ -40,12 +47,22 @@ pub mod account {
         }
         pub fn label() -> &'static str {
             match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
-                _ => "Add account",
+                _ => "Add Microsoft Account",
             }
         }
         pub fn offline() -> &'static str {
             match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
                 _ => "Add Offline Account",
+            }
+        }
+        pub fn offline_mode() -> &'static str {
+            match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
+                _ => "Offline Mode (Developer Use Only)",
+            }
+        }
+        pub fn offline_warning() -> &'static str {
+            match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
+                _ => "Offline accounts may not work on online servers",
             }
         }
         pub fn submit() -> &'static str {
@@ -55,8 +72,23 @@ pub mod account {
         }
         pub fn title() -> &'static str {
             match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
-                _ => "Adding new account",
+                _ => "Add Account",
             }
+        }
+    }
+    pub fn login_microsoft() -> &'static str {
+        match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
+            _ => "Microsoft Account",
+        }
+    }
+    pub fn login_mode() -> &'static str {
+        match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
+            _ => "Login Mode",
+        }
+    }
+    pub fn login_offline() -> &'static str {
+        match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
+            _ => "Offline Account",
         }
     }
     pub fn name() -> &'static str {
@@ -67,6 +99,16 @@ pub mod account {
     pub fn none() -> &'static str {
         match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
             _ => "No Account",
+        }
+    }
+    pub fn offline_username() -> &'static str {
+        match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
+            _ => "Username",
+        }
+    }
+    pub fn offline_username_placeholder() -> &'static str {
+        match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
+            _ => "Enter username (1-16 characters)",
         }
     }
     pub fn override_account() -> &'static str {
@@ -94,6 +136,7 @@ pub mod common {
     pub fn get(key: &str) -> Option<&'static str> {
         match key {
             "app_name" => Some(app_name()),
+            "app_name_short" => Some(app_name_short()),
             "apply_changes" => Some(apply_changes()),
             "cancel" => Some(cancel()),
             "custom" => Some(custom()),
@@ -113,6 +156,11 @@ pub mod common {
         }
     }
     pub fn app_name() -> &'static str {
+        match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
+            _ => "Integrity Launcher (Fork of Pandora)",
+        }
+    }
+    pub fn app_name_short() -> &'static str {
         match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
             _ => "Integrity Launcher",
         }
@@ -2302,6 +2350,62 @@ pub mod settings {
         pub fn title() -> &'static str {
             match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
                 _ => "Deletion",
+            }
+        }
+    }
+    pub mod developer {
+        pub fn get(key: &str) -> Option<&'static str> {
+            match key {
+                "debug_logs" => Some(debug_logs()),
+                "mode" => Some(mode()),
+                "mode_description" => Some(mode_description()),
+                "title" => Some(title()),
+                _ => None,
+            }
+        }
+        pub fn debug_logs() -> &'static str {
+            match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
+                _ => "Show debug logs",
+            }
+        }
+        pub fn mode() -> &'static str {
+            match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
+                _ => "Developer Mode",
+            }
+        }
+        pub fn mode_description() -> &'static str {
+            match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
+                _ => "Enable debug logs and advanced settings",
+            }
+        }
+        pub fn title() -> &'static str {
+            match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
+                _ => "Developer",
+            }
+        }
+    }
+    pub mod discord {
+        pub fn get(key: &str) -> Option<&'static str> {
+            match key {
+                "rpc_description" => Some(rpc_description()),
+                "rpc_enabled" => Some(rpc_enabled()),
+                "title" => Some(title()),
+                _ => None,
+            }
+        }
+        pub fn rpc_description() -> &'static str {
+            match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
+                _ => "Show your game status on Discord",
+            }
+        }
+        pub fn rpc_enabled() -> &'static str {
+            match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
+                _ => "Enable Discord Rich Presence",
+            }
+        }
+        pub fn title() -> &'static str {
+            match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
+                _ => "Discord",
             }
         }
     }

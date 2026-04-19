@@ -5,11 +5,10 @@ use gpui::{prelude::*, *};
 use gpui_component::{
     ActiveTheme as _, Disableable, Icon, InteractiveElementExt, WindowExt, button::{Button, ButtonVariants}, h_flex, input::{Input, InputState}, notification::{Notification, NotificationType}, scroll::ScrollableElement, tooltip::Tooltip, v_flex
 };
-use rand::Rng;
 use rustc_hash::FxHashMap;
 use schema::pandora_update::UpdatePrompt;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
+
 
 use crate::{
     component::{menu::{MenuGroup, MenuGroupItem}, page_path::PagePath, resize_panel::{ResizePanel, ResizePanelState}, shrinking_text::ShrinkingText, title_bar::TitleBar}, entity::{
@@ -475,6 +474,8 @@ impl Render for LauncherUI {
                     let backend_handle = backend_handle.clone();
                     window.open_sheet_at(gpui_component::Placement::Left, cx, move |sheet, _, cx| {
                         let hide_skins = InterfaceConfig::get(cx).hide_skins;
+                        let border_color = cx.theme().border;
+                        let muted_fg = cx.theme().muted_foreground;
 
                         let (accounts, selected_account) = {
                             let accounts = accounts.read(cx);
@@ -537,11 +538,11 @@ impl Render for LauncherUI {
                                 .gap_3()
                                 .child(div()
                                     .text_sm()
-                                    .text_color(cx.theme().muted_foreground)
+                                    .text_color(muted_fg)
                                     .child(t::account::add::offline_mode()))
                                 .child(div()
                                     .text_xs()
-                                    .text_color(cx.theme().muted_foreground)
+                                    .text_color(muted_fg)
                                     .child(t::account::add::offline_warning()))
                                 // Add Account buttons container
                                 .child(v_flex()
@@ -571,9 +572,8 @@ impl Render for LauncherUI {
                                                 let mut add_button = Button::new("add").label(t::account::add::submit()).disabled(!valid_name).on_click(move |_, window, cx| {
                                                     window.close_all_dialogs(cx);
                                                     
-                                                    // Generate UUID v3 (deterministic based on username)
-                                                    let namespace = uuid::Uuid::NAMESPACE_DNS;
-                                                    let uuid = uuid::Uuid::new_v3(&namespace, username.as_bytes());
+                                                    // Generate a random UUID for offline account
+                                                    let uuid = uuid::Uuid::new_v4();
                                                     
                                                     backend_handle.send(MessageToBackend::AddOfflineAccount {
                                                         name: username.clone().into(),
@@ -594,7 +594,7 @@ impl Render for LauncherUI {
                                             });
                                         }
                                     }))
-                                    .child(div().h_1().border_t_1().border_color(cx.theme().border))
+                                    .child(div().h_1().border_t_1().border_color(border_color))
                                     .children(items)
                                 )
                             )

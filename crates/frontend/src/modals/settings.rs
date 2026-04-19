@@ -417,7 +417,7 @@ impl Settings {
                 .child(t::settings::proxy::launcher_only_note()))
     }
 
-    fn render_discord_tab(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+fn render_discord_tab(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let discord_enabled = InterfaceConfig::get(cx).discord_rpc_enabled;
 
         v_flex()
@@ -425,22 +425,14 @@ impl Settings {
             .p_4()
             .child(v_flex()
                 .gap_2()
-                .child(div().text_lg().font_bold().child(t::settings::discord::title()))
-                .child(div().text_sm().text_color(cx.theme().muted_foreground).child(t::settings::discord::rpc_description())))
+                .child(div().text_lg().child(t::settings::discord::title())))
             .child(div()
                 .flex()
                 .items_center()
                 .justify_between()
                 .p_3()
-                .bg(cx.theme().input_bg)
                 .rounded(cx.theme().radius)
-                .child(div().child(t::settings::discord::rpc_enabled()))
-                .child(Checkbox::new("discord-rpc-toggle")
-                    .checked(discord_enabled)
-                    .on_click(cx.listener(|_, _, _window, cx| {
-                        let mut config = InterfaceConfig::get_mut(cx);
-                        config.discord_rpc_enabled = !config.discord_rpc_enabled;
-                    }))))
+                .child(div().child(t::settings::discord::rpc_enabled())))
     }
 
     fn render_developer_tab(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -451,14 +443,12 @@ impl Settings {
             .p_4()
             .child(v_flex()
                 .gap_2()
-                .child(div().text_lg().font_bold().child(t::settings::developer::title()))
-                .child(div().text_sm().text_color(cx.theme().muted_foreground).child(t::settings::developer::mode_description())))
+                .child(div().text_lg().child(t::settings::developer::title())))
             .child(div()
                 .flex()
                 .items_center()
                 .justify_between()
                 .p_3()
-                .bg(cx.theme().input_bg)
                 .rounded(cx.theme().radius)
                 .child(div().child(t::settings::developer::mode()))
                 .child(Checkbox::new("developer-mode-toggle")
