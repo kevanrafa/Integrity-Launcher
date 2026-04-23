@@ -142,14 +142,19 @@ pub fn start_instance(
     window: &mut Window,
     cx: &mut App,
 ) {
-    // Check if there are any accounts
-    let has_accounts = !cx.global::<LauncherRootGlobal>().root.read(cx).data.accounts.read(cx).accounts.is_empty();
+    let has_selected_account = cx
+        .global::<LauncherRootGlobal>()
+        .root
+        .read(cx)
+        .data
+        .accounts
+        .read(cx)
+        .selected_account_uuid
+        .is_some();
 
-    if !has_accounts {
-        // No accounts, open account sheet to add offline account
+    if !has_selected_account {
         let data = cx.global::<LauncherRootGlobal>().root.read(cx).data.clone();
-        let build = modals::settings::build_settings_sheet(&data, window, cx);
-        window.open_sheet_at(gpui_component::Placement::Left, cx, build);
+        crate::ui::open_account_manager(&data, window, cx);
         return;
     }
 
