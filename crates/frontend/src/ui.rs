@@ -3,7 +3,7 @@ use std::{collections::VecDeque, sync::Arc};
 use bridge::{instance::InstanceID, message::MessageToBackend};
 use gpui::{prelude::*, *};
 use gpui_component::{
-    ActiveTheme as _, Disableable, Icon, InteractiveElementExt, WindowExt, button::{Button, ButtonVariants}, h_flex, input::{Input, InputState}, notification::{Notification, NotificationType}, scroll::ScrollableElement, tooltip::Tooltip, v_flex
+    ActiveTheme as _, Disableable, Icon, InteractiveElementExt, WindowExt, button::{Button, ButtonVariants}, h_flex, input::{Input, InputState}, scroll::ScrollableElement, tooltip::Tooltip, v_flex
 };
 use rustc_hash::FxHashMap;
 use schema::pandora_update::UpdatePrompt;
@@ -678,6 +678,8 @@ impl Render for LauncherUI {
 }
 
 fn open_bug_report_url(window: &mut Window, cx: &mut App) {
+    const BUG_REPORT_URL: &str = "https://github.com/kevanrafa/Integrity-Launcher/issues/new";
+
     let mut body = String::from(r#"## Description of bug
 (Write here)
 
@@ -720,12 +722,5 @@ fn open_bug_report_url(window: &mut Window, cx: &mut App) {
         }
     }
 
-    let Some(github) = option_env!("GITHUB_REPOSITORY_URL") else {
-        let mut notification: Notification = (NotificationType::Error, SharedString::from("Unable to report bug, GITHUB_REPOSITORY_URL was not set at compile time")).into();
-        notification = notification.autohide(false);
-        window.push_notification(notification, cx);
-        return;
-    };
-
-    cx.open_url(&format!("{}/issues/new?body={}", github, urlencoding::encode(&body)));
+    crate::open_external_url(&format!("{BUG_REPORT_URL}?body={}", urlencoding::encode(&body)), window, cx);
 }

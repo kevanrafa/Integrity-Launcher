@@ -235,7 +235,7 @@ en = "Name"
 en = "Author"
 
 [common.app_name]
-en = "Integrity Launcher (Fork of Pandora)"
+en = "Integrity Launcher"
 [common.app_name_short]
 en = "Integrity Launcher"
 [common.unknown]

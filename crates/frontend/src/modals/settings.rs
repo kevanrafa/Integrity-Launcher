@@ -15,7 +15,7 @@ use gpui_component::{
 };
 use schema::backend_config::{BackendConfig, ProxyConfig, ProxyProtocol};
 
-use crate::{entity::DataEntities, icon::PandoraIcon, interface_config::InterfaceConfig};
+use crate::{discord_rpc, entity::DataEntities, icon::PandoraIcon, interface_config::InterfaceConfig};
 
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
 enum SettingsTab {
@@ -432,7 +432,16 @@ fn render_discord_tab(&mut self, _window: &mut Window, cx: &mut Context<Self>) -
                 .justify_between()
                 .p_3()
                 .rounded(cx.theme().radius)
-                .child(div().child(t::settings::discord::rpc_enabled())))
+                .child(v_flex()
+                    .gap_1()
+                    .child(div().child(t::settings::discord::rpc_enabled()))
+                    .child(div().text_sm().text_color(cx.theme().muted_foreground).child(t::settings::discord::rpc_description())))
+                .child(Checkbox::new("discord-rpc-enabled")
+                    .checked(discord_enabled)
+                    .on_click(cx.listener(|_, value, _, cx| {
+                        InterfaceConfig::get_mut(cx).discord_rpc_enabled = *value;
+                        discord_rpc::sync_enabled_from_config(*value, cx);
+                    }))))
     }
 
     fn render_developer_tab(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -454,7 +463,7 @@ fn render_discord_tab(&mut self, _window: &mut Window, cx: &mut Context<Self>) -
                 .child(Checkbox::new("developer-mode-toggle")
                     .checked(developer_mode)
                     .on_click(cx.listener(|_, _, _window, cx| {
-                        let mut config = InterfaceConfig::get_mut(cx);
+                        let config = InterfaceConfig::get_mut(cx);
                         config.developer_mode = !config.developer_mode;
                     }))))
     }

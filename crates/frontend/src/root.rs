@@ -3,14 +3,20 @@ use std::{path::Path, sync::Arc};
 use bridge::{
     handle::BackendHandle,
     install::ContentInstall,
-    instance::{InstanceID, InstanceContentID},
+    instance::{InstanceContentID, InstanceID},
     message::{MessageToBackend, QuickPlayLaunch},
     modal_action::ModalAction,
 };
 use gpui::{prelude::*, *};
-use gpui_component::{Root, Theme, WindowExt, scroll::ScrollableElement, v_flex};
+use gpui_component::{scroll::ScrollableElement, v_flex, Root, Theme, WindowExt};
 
-use crate::{Backwards, CloseWindow, Forwards, MAIN_FONT, OpenSettings, entity::DataEntities, modals, ui::{LauncherUI, PageType}};
+use crate::{
+    boot_sequence::BootSequence,
+    entity::DataEntities,
+    modals,
+    ui::{LauncherUI, PageType},
+    CloseWindow, OpenSettings, MAIN_FONT,
+};
 
 pub struct LauncherRootGlobal {
     pub root: Entity<LauncherRoot>,
@@ -22,14 +28,11 @@ pub struct LauncherRoot {
     pub ui: Entity<LauncherUI>,
     data: DataEntities,
     focus_handle: FocusHandle,
+    boot_sequence: Entity<BootSequence>,
 }
 
 impl LauncherRoot {
-    pub fn new(
-        data: &DataEntities,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Self {
+    pub fn new(data: &DataEntities, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let launcher_ui = cx.new(|cx| LauncherUI::new(data, window, cx));
 
         let focus_handle = cx.focus_handle();
@@ -39,6 +42,7 @@ impl LauncherRoot {
             ui: launcher_ui,
             data: data.clone(),
             focus_handle,
+            boot_sequence: cx.new(|_| BootSequence::new()),
         }
     }
 }
@@ -52,13 +56,30 @@ impl Render for LauncherRoot {
                 l: 0.25,
                 a: 1.,
             };
-            return v_flex().size_full().text_color(gpui::white()).bg(purple).child(message.clone()).overflow_y_scrollbar().into_any_element();
+            return v_flex()
+                .size_full()
+                .text_color(gpui::white())
+                .bg(purple)
+                .child(message.clone())
+                .overflow_y_scrollbar()
+                .into_any_element();
         }
         if let Some(message) = &*self.data.panic_messages.panic_message.read() {
-            return v_flex().size_full().text_color(gpui::white()).bg(gpui::blue()).child(message.clone()).overflow_y_scrollbar().into_any_element();
+            return v_flex()
+                .size_full()
+                .text_color(gpui::white())
+                .bg(gpui::blue())
+                .child(message.clone())
+                .overflow_y_scrollbar()
+                .into_any_element();
         }
         if self.data.backend_handle.is_closed() {
-            return v_flex().size_full().text_color(gpui::white()).bg(gpui::red()).child(t::system::backend_shutdown()).into_any_element();
+            return v_flex()
+                .size_full()
+                .text_color(gpui::white())
+                .bg(gpui::red())
+                .child(t::system::backend_shutdown())
+                .into_any_element();
         }
 
         Theme::global_mut(cx).sheet.margin_top = Pixels::ZERO;
@@ -67,10 +88,18 @@ impl Render for LauncherRoot {
         let dialog_layer = Root::render_dialog_layer(window, cx);
         let notification_layer = Root::render_notification_layer(window, cx);
 
+        let boot_overlay = self
+            .boot_sequence
+            .read(cx)
+            .is_active()
+            .then(|| self.boot_sequence.clone().into_any_element());
+
         v_flex()
             .size_full()
             .font_family(MAIN_FONT)
+            .relative()
             .child(self.ui.clone())
+            .when_some(boot_overlay, |this, overlay| this.child(overlay))
             .children(sheet_layer)
             .children(dialog_layer)
             .children(notification_layer)
@@ -83,22 +112,6 @@ impl Render for LauncherRoot {
                 move |_: &OpenSettings, window, cx| {
                     let build = crate::modals::settings::build_settings_sheet(&data, window, cx);
                     window.open_sheet_at(gpui_component::Placement::Left, cx, build);
-                }
-            })
-            .on_action({
-                let ui = self.ui.clone();
-                move |_: &Backwards, window, cx| {
-                    ui.update(cx, |ui, cx| {
-                        ui.nav_backwards(window, cx);
-                    });
-                }
-            })
-            .on_action({
-                let ui = self.ui.clone();
-                move |_: &Forwards, window, cx| {
-                    ui.update(cx, |ui, cx| {
-                        ui.nav_forwards(window, cx);
-                    });
                 }
             })
             .on_mouse_down(MouseButton::Navigate(NavigationDirection::Back), {
@@ -121,21 +134,6 @@ impl Render for LauncherRoot {
     }
 }
 
-pub fn start_new_account_login(
-    backend_handle: &BackendHandle,
-    window: &mut Window,
-    cx: &mut App,
-) {
-    let modal_action = ModalAction::default();
-
-    backend_handle.send(MessageToBackend::AddNewAccount {
-        modal_action: modal_action.clone(),
-    });
-
-    let title = t::account::add::title();
-    modals::generic::show_modal(window, cx, title.into(), t::account::add::error().into(), modal_action);
-}
-
 pub fn start_instance(
     id: InstanceID,
     name: SharedString,
@@ -144,6 +142,17 @@ pub fn start_instance(
     window: &mut Window,
     cx: &mut App,
 ) {
+    // Check if there are any accounts
+    let has_accounts = !cx.global::<LauncherRootGlobal>().root.read(cx).data.accounts.read(cx).accounts.is_empty();
+
+    if !has_accounts {
+        // No accounts, open account sheet to add offline account
+        let data = cx.global::<LauncherRootGlobal>().root.read(cx).data.clone();
+        let build = modals::settings::build_settings_sheet(&data, window, cx);
+        window.open_sheet_at(gpui_component::Placement::Left, cx, build);
+        return;
+    }
+
     let modal_action = ModalAction::default();
 
     backend_handle.send(MessageToBackend::StartInstance {
@@ -154,6 +163,17 @@ pub fn start_instance(
 
     let title: SharedString = t::instance::start::title(&name).into();
     modals::generic::show_modal(window, cx, title, t::instance::start::error().into(), modal_action);
+}
+
+pub fn start_new_account_login(backend_handle: &BackendHandle, window: &mut Window, cx: &mut App) {
+    let modal_action = ModalAction::default();
+
+    backend_handle.send(MessageToBackend::AddNewAccount {
+        modal_action: modal_action.clone(),
+    });
+
+    let title = t::account::add::title();
+    modals::generic::show_modal(window, cx, title.into(), t::account::add::error().into(), modal_action);
 }
 
 pub fn start_install(
@@ -172,12 +192,7 @@ pub fn start_install(
     modals::generic::show_notification(window, cx, t::instance::content::install::error().into(), modal_action);
 }
 
-pub fn start_update_check(
-    instance: InstanceID,
-    backend_handle: &BackendHandle,
-    window: &mut Window,
-    cx: &mut App,
-) {
+pub fn start_update_check(instance: InstanceID, backend_handle: &BackendHandle, window: &mut Window, cx: &mut App) {
     let modal_action = ModalAction::default();
 
     backend_handle.send(MessageToBackend::UpdateCheck {
@@ -204,15 +219,15 @@ pub fn update_single_mod(
         modal_action: modal_action.clone(),
     });
 
-    modals::generic::show_notification(window, cx, t::instance::content::update::download::error().into(), modal_action);
+    modals::generic::show_notification(
+        window,
+        cx,
+        t::instance::content::update::download::error().into(),
+        modal_action,
+    );
 }
 
-pub fn upload_log_file(
-    path: Arc<Path>,
-    backend_handle: &BackendHandle,
-    window: &mut Window,
-    cx: &mut App,
-) {
+pub fn upload_log_file(path: Arc<Path>, backend_handle: &BackendHandle, window: &mut Window, cx: &mut App) {
     let modal_action = ModalAction::default();
 
     backend_handle.send(MessageToBackend::UploadLogFile {
@@ -224,12 +239,7 @@ pub fn upload_log_file(
     modals::generic::show_modal(window, cx, title, t::instance::logs::upload::error().into(), modal_action);
 }
 
-pub fn switch_page(
-    page: PageType,
-    breadcrumbs: &[PageType],
-    window: &mut Window,
-    cx: &mut App,
-) {
+pub fn switch_page(page: PageType, breadcrumbs: &[PageType], window: &mut Window, cx: &mut App) {
     cx.update_global::<LauncherRootGlobal, ()>(|global, cx| {
         global.root.update(cx, |launcher_root, cx| {
             launcher_root.ui.update(cx, |ui, cx| {

@@ -21,6 +21,7 @@ use crate::{
 };
 
 pub mod component;
+pub mod boot_sequence;
 pub mod data_asset_loader;
 pub mod discord_rpc;
 pub mod entity;
@@ -75,9 +76,9 @@ pub fn start(
     quit_coordinator: QuitCoordinator,
 ) {
     let user_agent = if let Some(version) = option_env!("INTEGRITY_LAUNCHER_VERSION") {
-        format!("IntegrityLauncher/{version} (Fork of Pandora)")
+        format!("IntegrityLauncher/{version}")
     } else {
-        "IntegrityLauncher/dev (Fork of Pandora)".to_string()
+        "IntegrityLauncher/dev".to_string()
     };
 
     let http_client = Arc::new(reqwest_client::ReqwestClient::user_agent(&user_agent).unwrap());
@@ -91,6 +92,8 @@ pub fn start(
 
         gpui_component::init(cx);
         InterfaceConfig::init(cx, launcher_dir.join("interface.json").into());
+        discord_rpc::init(cx);
+        discord_rpc::sync_enabled_from_config(InterfaceConfig::get(cx).discord_rpc_enabled, cx);
 
         gpui_component::Theme::change(gpui_component::ThemeMode::Dark, None, cx);
 
@@ -117,6 +120,7 @@ pub fn start(
 
         cx.on_app_quit(|cx| {
             InterfaceConfig::force_save(cx);
+            discord_rpc::shutdown_global(cx);
             async {}
         }).detach();
 
@@ -326,6 +330,13 @@ pub(crate) fn open_folder(path: &Path, window: &mut Window, cx: &mut App) {
         }
     } else {
         let notification: Notification = (NotificationType::Error, t::file_system::open_folder::not_a_directory()).into();
+        window.push_notification(notification.autohide(false), cx);
+    }
+}
+
+pub(crate) fn open_external_url(url: &str, window: &mut Window, cx: &mut App) {
+    if let Err(err) = open::that_detached(url) {
+        let notification: Notification = (NotificationType::Error, SharedString::new(format!("Unable to open link: {err}"))).into();
         window.push_notification(notification.autohide(false), cx);
     }
 }

@@ -14,6 +14,7 @@ use gpui_component::{
 };
 
 use crate::{
+    discord_rpc,
     entity::{account::AccountEntries, instance::InstanceEntries, metadata::FrontendMetadata, DataEntities},
     game_output::{GameOutput, GameOutputRoot},
     interface_config::InterfaceConfig,
@@ -118,6 +119,7 @@ impl Processor {
                 status,
             } => {
                 if status == InstanceStatus::Running {
+                    discord_rpc::set_running_instance(name.as_str(), cx);
                     if InterfaceConfig::get(cx).hide_main_window_on_launch {
                         if let Some(handle) = self.main_window_handle.take() {
                             self.main_window_hidden.store(true, std::sync::atomic::Ordering::SeqCst);
@@ -127,6 +129,7 @@ impl Processor {
                         }
                     }
                 } else if status == InstanceStatus::NotRunning {
+                    discord_rpc::clear_running_instance(cx);
                     if self.main_window_handle.is_none()
                         && self.main_window_hidden.load(std::sync::atomic::Ordering::SeqCst)
                     {

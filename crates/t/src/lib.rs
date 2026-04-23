@@ -157,7 +157,7 @@ pub mod common {
     }
     pub fn app_name() -> &'static str {
         match crate::LANG.load(std::sync::atomic::Ordering::Relaxed) {
-            _ => "Integrity Launcher (Fork of Pandora)",
+            _ => "Integrity Launcher",
         }
     }
     pub fn app_name_short() -> &'static str {
