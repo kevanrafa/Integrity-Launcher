@@ -29,6 +29,7 @@ pub mod game_output;
 pub mod modals;
 pub mod pages;
 pub mod icon;
+pub mod integrity_api;
 pub mod interface_config;
 pub mod png_render_cache;
 pub mod processor;

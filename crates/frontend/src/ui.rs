@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     component::{menu::{MenuGroup, MenuGroupItem}, page_path::PagePath, resize_panel::{ResizePanel, ResizePanelState}, shrinking_text::ShrinkingText, title_bar::TitleBar}, entity::{
         DataEntities, account::AccountExt, instance::{InstanceAddedEvent, InstanceEntries, InstanceModifiedEvent, InstanceMovedToTopEvent, InstanceRemovedEvent}
-    }, icon::PandoraIcon, interface_config::InterfaceConfig, modals, pages::{curseforge_page::CurseforgeSearchPage, import::ImportPage, instance::instance_page::InstancePage, instances_page::InstancesPage, modrinth_page::ModrinthSearchPage, modrinth_project_page::ModrinthProjectPage, page::Page, skins_page::SkinsPage, syncing_page::SyncingPage}, png_render_cache,
+    }, icon::PandoraIcon, integrity_api::{self, IntegrityLauncherInfo, IntegrityNewsItem}, interface_config::InterfaceConfig, modals, pages::{curseforge_page::CurseforgeSearchPage, import::ImportPage, instance::instance_page::InstancePage, instances_page::InstancesPage, integrity_modpacks_page::IntegrityModpacksPage, modrinth_page::ModrinthSearchPage, modrinth_project_page::ModrinthProjectPage, page::Page, skins_page::SkinsPage, syncing_page::SyncingPage}, png_render_cache,
 };
 
 pub struct LauncherUI {
@@ -25,6 +25,12 @@ pub struct LauncherUI {
     page_history_backwards: VecDeque<(PageType, Arc<[PageType]>)>,
     page_history_forwards: Vec<(PageType, Arc<[PageType]>)>,
     previous_pages: FxHashMap<PageType, LauncherPage>,
+    launcher_info: Option<IntegrityLauncherInfo>,
+    launcher_info_error: Option<SharedString>,
+    news_items: Option<Vec<IntegrityNewsItem>>,
+    news_error: Option<SharedString>,
+    _integrity_status_task: Task<()>,
+    _integrity_news_task: Task<()>,
     _instance_added_subscription: Subscription,
     _instance_modified_subscription: Subscription,
     _instance_removed_subscription: Subscription,
@@ -37,6 +43,7 @@ pub enum PageType {
     #[default]
     Instances,
     Skins,
+    IntegrityModpacks,
     Modrinth {
         installing_for: Option<SharedString>,
     },
@@ -60,6 +67,7 @@ impl PageType {
         match self {
             PageType::Instances => t::instance::title().into(),
             PageType::Skins => t::skins::title().into(),
+            PageType::IntegrityModpacks => "Modpacks".into(),
             PageType::Modrinth { installing_for } => {
                 if installing_for.is_some() {
                     t::instance::content::install::from_modrinth().into()
@@ -89,6 +97,7 @@ impl PageType {
 pub enum LauncherPage {
     Instances(Entity<InstancesPage>),
     Skins(Entity<SkinsPage>),
+    IntegrityModpacks(Entity<IntegrityModpacksPage>),
     Modrinth(Entity<ModrinthSearchPage>),
     Curseforge(Entity<CurseforgeSearchPage>),
     Import(Entity<ImportPage>),
@@ -108,6 +117,7 @@ impl LauncherPage {
         let (scrollable, controls, page) = match self {
             LauncherPage::Instances(entity) => process(entity, window, cx),
             LauncherPage::Skins(entity) => process(entity, window, cx),
+            LauncherPage::IntegrityModpacks(entity) => process(entity, window, cx),
             LauncherPage::Modrinth(entity) => process(entity, window, cx),
             LauncherPage::Curseforge(entity) => process(entity, window, cx),
             LauncherPage::Import(entity) => process(entity, window, cx),
@@ -118,17 +128,52 @@ impl LauncherPage {
 
         let config = InterfaceConfig::get(cx);
         let page_path = PagePath::new(ui.data.clone(), config.main_page.clone(), config.page_path.clone());
+        let news_button = Button::new("integrity-news")
+            .outline()
+            .icon(PandoraIcon::Bell)
+            .label("News")
+            .on_click({
+                let news_items = ui.news_items.clone();
+                let news_error = ui.news_error.clone();
+                move |_, window, cx| {
+                    open_news_dialog(news_items.clone(), news_error.clone(), window, cx);
+                }
+            });
+        let controls = h_flex().gap_2().child(news_button).child(controls);
+
         let title_bar = TitleBar {
             page_path,
-            controls,
+            controls: controls.into_any_element(),
             update: ui.update.clone(),
             send: ui.data.backend_handle.clone(),
         };
+
+        let maintenance_banner = ui.launcher_info.as_ref().and_then(|info| {
+            info.maintenance.then(|| {
+                let message = info
+                    .maintenance_message
+                    .as_ref()
+                    .map(|message| SharedString::new(message.clone()))
+                    .unwrap_or_else(|| "Integrity services are currently in maintenance.".into());
+                h_flex()
+                    .mx_4()
+                    .mt_3()
+                    .gap_2()
+                    .p_3()
+                    .rounded_lg()
+                    .border_1()
+                    .border_color(cx.theme().warning)
+                    .bg(cx.theme().warning.opacity(0.12))
+                    .child(PandoraIcon::TriangleAlert)
+                    .child(message)
+            })
+        });
 
         if scrollable {
             v_flex()
                 .size_full()
                 .child(title_bar)
+                .when_some(maintenance_banner, |this, banner| this.child(banner))
                 .child(div().flex_1().overflow_hidden().child(
                     v_flex().size_full().overflow_y_scrollbar().child(page),
                 ))
@@ -136,6 +181,7 @@ impl LauncherPage {
             v_flex()
                 .size_full()
                 .child(title_bar)
+                .when_some(maintenance_banner, |this, banner| this.child(banner))
                 .child(page)
         }
     }
@@ -225,7 +271,7 @@ impl LauncherUI {
             },
         };
 
-        Self {
+        let mut launcher = Self {
             data: data.clone(),
             page,
             update: None,
@@ -234,11 +280,99 @@ impl LauncherUI {
             page_history_backwards: VecDeque::with_capacity(32),
             page_history_forwards: Vec::new(),
             previous_pages: FxHashMap::default(),
+            launcher_info: None,
+            launcher_info_error: None,
+            news_items: None,
+            news_error: None,
+            _integrity_status_task: Task::ready(()),
+            _integrity_news_task: Task::ready(()),
             _instance_added_subscription,
             _instance_modified_subscription,
             _instance_removed_subscription,
             _instance_moved_to_top_subscription,
+        };
+
+        launcher.load_integrity_status(window, cx);
+        launcher.load_integrity_news(cx);
+        launcher
+    }
+
+    fn load_integrity_status(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let client = cx.http_client();
+        self._integrity_status_task = cx.spawn_in(window, async move |launcher, cx| {
+            let result = integrity_api::load_launcher_info(client).await;
+            let _ = launcher.update_in(cx, |launcher, window, cx| {
+                match result {
+                    Ok(info) => {
+                        launcher.show_update_notification_if_needed(&info, window, cx);
+                        launcher.launcher_info = Some(info);
+                        launcher.launcher_info_error = None;
+                    },
+                    Err(error) => {
+                        launcher.launcher_info_error = Some(SharedString::new(error.to_string()));
+                    },
+                }
+                cx.notify();
+            });
+        });
+    }
+
+    fn load_integrity_news(&mut self, cx: &mut Context<Self>) {
+        let client = cx.http_client();
+        self._integrity_news_task = cx.spawn(async move |launcher, cx| {
+            let result = integrity_api::load_news(client).await;
+            let _ = launcher.update(cx, |launcher, cx| {
+                match result {
+                    Ok(news) => {
+                        launcher.news_items = Some(news);
+                        launcher.news_error = None;
+                    },
+                    Err(error) => {
+                        launcher.news_error = Some(SharedString::new(error.to_string()));
+                    },
+                }
+                cx.notify();
+            });
+        });
+    }
+
+    fn show_update_notification_if_needed(
+        &self,
+        info: &IntegrityLauncherInfo,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        let Some(latest) = info.latest.as_deref() else {
+            return;
+        };
+        let current = integrity_api::current_launcher_version();
+        if !integrity_api::is_newer_version(latest, current) {
+            return;
         }
+
+        let release_url = info.release_url.clone();
+        let notification = gpui_component::notification::Notification::new()
+            .autohide(false)
+            .with_type(gpui_component::notification::NotificationType::Info)
+            .content(move |_, window, cx| {
+                v_flex()
+                    .gap_2()
+                    .child(div().font_semibold().child(format!("Integrity Launcher {latest} is available")))
+                    .child(div().text_sm().child(format!("Current version: {current}")))
+                    .when_some(release_url.clone(), |this, release_url| {
+                        this.child(
+                            Button::new("integrity-update-now")
+                                .success()
+                                .icon(PandoraIcon::Download)
+                                .label("Update Now")
+                                .on_click(move |_, window, cx| {
+                                    crate::open_external_url(&release_url, window, cx);
+                                }),
+                        )
+                    })
+                    .into_any_element()
+            });
+        window.push_notification(notification, cx);
     }
 
     fn create_page(data: &DataEntities, page: PageType, window: &mut Window, cx: &mut Context<Self>) -> Result<LauncherPage, PageType> {
