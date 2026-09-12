@@ -47,12 +47,14 @@ Selain Itu Kalian juga bisa Merubah Nama Instances nya dan juga merubah Icon Nya
 
 # Khusus Member The Integrity Council / V75 Federal
 > Jika Kalian Member Dari The Integrity Council Kalian Bisa Membuka File
-> .mrpack dari  Kriss Reison Untuk Langsung Import Modpack Dari The
-> Integrity Launcher. kalian bisa tinggal langsung ke Files > Import dan
+> .mrpack dari  Kriss Reison Untuk Langsung Import Modpack Dari The Integrity Launcher. 
+> kalian bisa tinggal langsung ke Files > Import
+> 
 > ![enter image description
 > here](https://cdn.discordapp.com/attachments/879559618899107840/1548193998966104155/image.png?ex=6aa62b85&is=6aa4da05&hm=a24235c4c0bc5c265d0289af81118ac64bfa3c15bae295efbce2495021eecb81&)
-> Lalu Kalian Pilih Import from Modrinth Pack atau .mrpack ![enter image
+> 
+> lalu Kalian Pilih Import from Modrinth Pack atau .mrpack ![enter image
 > description
 > here](https://cdn.discordapp.com/attachments/879559618899107840/1548194338583085216/image.png?ex=6aa62bd6&is=6aa4da56&hm=73ab366d977123c9247134246811460056ee86ab7adcb5f3f6fa21978dde12d9&)
-> Lalu Pilih File Yang Sudah Di Berikan Kriss Reison dan kalian tingal
+> Lalu Pilih File Yang Sudah Di Berikan Kriss Reison dan kalian tinggal
 > mainkan Modpack nya
